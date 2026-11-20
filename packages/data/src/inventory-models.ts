@@ -106,3 +106,12 @@ export interface PriceTierRow {
   minQuantity: string;
   price: string;
 }
+
+/** Dashboard inventory figures from public.dashboard_inventory_summary(). Decimals are strings. */
+export interface InventorySummary {
+  stockValue: string;
+  stockPositions: number;
+  outOfStockCount: number;
+  lowStockCount: number;
+  productCount: number;
+}

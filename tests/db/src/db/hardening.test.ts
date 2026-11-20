@@ -45,6 +45,7 @@ const PUBLIC_RPCS = [
   'list_stock_levels(uuid)',
   'list_low_stock(uuid,uuid)',
   'list_stock_movements(uuid,uuid,text,integer,integer)',
+  'dashboard_inventory_summary(uuid,uuid)',
 ];
 
 describe('table privileges match the least-privilege matrix', () => {
