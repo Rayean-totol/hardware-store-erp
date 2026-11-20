@@ -52,6 +52,8 @@ export interface CatalogRepository {
   /** expectedVersion: null to create; the current rowVersion to update. */
   saveProduct(draft: ProductDraft, expectedVersion: number | null): Promise<SaveResult>;
   setProductArchived(id: string, archived: boolean): Promise<void>;
+  /** Stores the storage object path of the product image (null removes it). */
+  setProductImagePath(id: string, path: string | null): Promise<void>;
 }
 
 /** Product draft → save_product payloads (snake_case, decimals as strings). */
@@ -148,6 +150,7 @@ export function createSupabaseCatalogRepository(db: DbClient): CatalogRepository
             p_query: q.search?.trim() || null,
             p_category_id: q.categoryId ?? null,
             p_include_archived: q.includeArchived ?? false,
+            p_brand_id: q.brandId ?? null,
           },
           { count: 'exact' },
         )
@@ -168,6 +171,12 @@ export function createSupabaseCatalogRepository(db: DbClient): CatalogRepository
       const result = await db.rpc('save_product', toSaveProductParams(draft, expectedVersion));
       const data = unwrap(result) as { id: string; row_version: number };
       return { id: data.id, rowVersion: Number(data.row_version) };
+    },
+
+    async setProductImagePath(id, path) {
+      const result = await db.from('products').update({ image_path: path }).eq('id', id).select('id');
+      if (result.error) throw toDataError(result.error);
+      if (!result.data || result.data.length === 0) throw new DataError('forbidden', 'Product not found or not permitted');
     },
 
     async setProductArchived(id, archived) {

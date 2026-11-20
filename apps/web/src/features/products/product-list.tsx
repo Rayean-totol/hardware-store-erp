@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@erp/ui';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Pencil, Plus, Search } from 'lucide-react';
+import { Archive, ArchiveRestore, Download, Pencil, Plus, Printer, Search, Upload } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
@@ -29,7 +29,8 @@ import { PageHeader } from '@/components/page-header';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
-import { catalogKeys, useCategories, useUnits } from './use-catalog-data';
+import { exportProductsCsv } from '@erp/data';
+import { catalogKeys, useBrands, useCategories, useUnits } from './use-catalog-data';
 
 const PAGE_SIZE = 25;
 
@@ -51,22 +52,27 @@ export function ProductList() {
 
   const [search, setSearch] = React.useState('');
   const [categoryId, setCategoryId] = React.useState('');
+  const [brandId, setBrandId] = React.useState('');
+  const [exporting, setExporting] = React.useState(false);
+  const [exportError, setExportError] = React.useState<unknown>(null);
   const [includeArchived, setIncludeArchived] = React.useState(false);
   const [page, setPage] = React.useState(0);
   const [confirm, setConfirm] = React.useState<Product | null>(null);
   const debouncedSearch = useDebounced(search, 250);
 
-  React.useEffect(() => setPage(0), [debouncedSearch, categoryId, includeArchived]);
+  React.useEffect(() => setPage(0), [debouncedSearch, categoryId, brandId, includeArchived]);
 
   const units = useUnits(orgId);
   const categories = useCategories(orgId);
+  const brands = useBrands(orgId);
   const products = useQuery({
-    queryKey: [...catalogKeys.products(orgId), { debouncedSearch, categoryId, includeArchived, page }],
+    queryKey: [...catalogKeys.products(orgId), { debouncedSearch, categoryId, brandId, includeArchived, page }],
     queryFn: () =>
       catalog.searchProducts({
         orgId,
         search: debouncedSearch,
         categoryId: categoryId || null,
+        brandId: brandId || null,
         includeArchived,
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
@@ -89,19 +95,48 @@ export function ProductList() {
 
   const unitLabel = (u: Unit | undefined) => (u ? name(u) : '?');
 
+  async function exportCsv() {
+    setExporting(true);
+    setExportError(null);
+    try {
+      const csv = await exportProductsCsv(catalog, orgId);
+      // UTF-8 byte-order mark so Excel opens Arabic and Bangla text correctly.
+      const blob = new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `products-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      setExportError(error);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
         title={t('products.title')}
         actions={
-          can('catalog.write') ? (
-            <Button asChild>
-              <Link href="/products/new/">
-                <Plus aria-hidden="true" />
-                {t('products.new')}
-              </Link>
+          <>
+            <Button variant="outline" asChild><Link href="/labels/"><Printer aria-hidden="true" />{t('labels.title')}</Link></Button>
+            <Button variant="outline" onClick={() => void exportCsv()} disabled={exporting}>
+              <Download aria-hidden="true" />{exporting ? t('common.saving') : t('products.export')}
             </Button>
-          ) : null
+            {can('catalog.write') ? (
+              <Button variant="outline" asChild><Link href="/products/import/"><Upload aria-hidden="true" />{t('products.import')}</Link></Button>
+            ) : null}
+            {can('catalog.write') ? (
+              <Button asChild>
+                <Link href="/products/new/">
+                  <Plus aria-hidden="true" />
+                  {t('products.new')}
+                </Link>
+              </Button>
+            ) : null}
+          </>
         }
       />
 
@@ -132,6 +167,17 @@ export function ProductList() {
             </option>
           ))}
         </NativeSelect>
+        <NativeSelect
+          value={brandId}
+          onChange={(e) => setBrandId(e.target.value)}
+          aria-label={t('product.brand')}
+          className="w-auto"
+        >
+          <option value="">{t('products.all_brands')}</option>
+          {(brands.data ?? []).map((b) => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+        </NativeSelect>
         <label className="flex items-center gap-2 text-sm">
           <Checkbox checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
           {t('products.include_archived')}
@@ -139,6 +185,7 @@ export function ProductList() {
       </div>
 
       {products.error ? <ErrorAlert error={products.error} onRetry={() => void products.refetch()} /> : null}
+      {exportError ? <ErrorAlert error={exportError} /> : null}
       {archive.error ? <ErrorAlert error={archive.error} /> : null}
 
       <Card>

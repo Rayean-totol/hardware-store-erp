@@ -62,6 +62,7 @@ export const mapProduct = (r: ProductRow): Product => ({
   taxExemptionReasonCode: r.tax_exemption_reason_code,
   reorderLevel: r.reorder_level,
   archivedAt: r.archived_at,
+  imagePath: r.image_path,
   updatedAt: r.updated_at,
   rowVersion: Number(r.row_version),
   // base unit first, then by factor ascending

@@ -60,6 +60,7 @@ export interface ProductRow {
   tax_exemption_reason_code: string | null;
   reorder_level: string | null;
   archived_at: string | null;
+  image_path: string | null;
   updated_at: string;
   row_version: number;
   product_units: ProductUnitRow[];
@@ -74,5 +75,5 @@ export const PRODUCT_UNIT_SELECT =
   'id, unit_id, factor::text, is_base, barcode, sale_price::text, is_sale_unit, is_purchase_unit';
 export const PRODUCT_SELECT =
   'id, org_id, sku, name_en, name_ar, name_bn, description, category_id, brand_id, product_type, base_unit_id, ' +
-  'tax_category, tax_exemption_reason_code, reorder_level::text, archived_at, updated_at, row_version, ' +
+  'tax_category, tax_exemption_reason_code, reorder_level::text, archived_at, image_path, updated_at, row_version, ' +
   `product_units(${PRODUCT_UNIT_SELECT})`;

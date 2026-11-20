@@ -123,6 +123,10 @@ importers:
       idb:
         specifier: ^8.0.4
         version: 8.0.4
+    devDependencies:
+      fake-indexeddb:
+        specifier: ^6.2.8
+        version: 6.2.8
 
   packages/domain:
     dependencies:

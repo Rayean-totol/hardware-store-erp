@@ -7,8 +7,8 @@ go-live.
 
 | # | Phase | Contents | Depends on | Status |
 | --- | --- | --- | --- | --- |
-| 1 | **Foundation and catalog** | Monorepo, architecture docs, migrations, Auth/RLS, roles and permissions, audit log, shared UI system, i18n (en/ar/bn, RTL), product management (categories, brands, units, multi-unit products, barcodes, prices), seed data, tests, setup guide | — | **Done** (this commit) |
-| 2 | Inventory and offline sync | Stock ledger, per-branch stock levels, moving-average cost, adjustments, transfers, counts; local store (SQLite/IndexedDB), outbox, pull sync, device registration | 1 | Next |
+| 1 | **Foundation and catalog** | Monorepo, architecture docs, migrations, Auth/RLS, roles and permissions, audit log, shared UI system, i18n (en/ar/bn, RTL), product management (categories, brands, units, multi-unit products, barcodes, prices), seed data, tests, setup guide | — | **Done** (merged) |
+| 2 | Inventory and offline sync | Warehouses, immutable stock ledger, moving-average cost, stock in/out/adjustments, low-stock alerts, price tiers, product images, barcode labels, CSV import/export, IndexedDB outbox with idempotent server sync | 1 | **Implemented on branch `claude/phase-2-inventory`** (PostgREST suite not yet run; see below) |
 | 3 | Accounting core | Chart of accounts, fiscal periods, journals with balance enforcement, posting-rule engine, trial balance | 1 | Planned |
 | 4 | Suppliers and purchasing | Suppliers, POs, goods receipts → stock and journals, supplier invoices/AP, returns, payments | 2, 3 | Planned |
 | 5 | Customers and POS | Customers, AR, cash sessions, offline POS sales/returns, tenders, receipts, per-device numbering | 2, 3 | Planned |
@@ -39,3 +39,38 @@ go-live.
 * Custom roles are not editable. Only the system roles exist.
 * Auth flows (sign-up, password reset e-mails) rely on Supabase Auth and were not tested end-to-end in this repository's CI, because that needs the Docker-based Supabase stack.
 * Capacitor and Tauri projects are not scaffolded yet. The web app is built as a static export so they can wrap it in Phase 7.
+
+## Phase 2 scope (implemented)
+
+Migrations (additive; Phase 1 migrations unchanged):
+
+* `20261121000100_warehouses` — inventory permissions, `allow_negative_stock`, warehouses with a default per branch
+* `20261121000200_stock_ledger` — `stock_movements` (append-only), `stock_levels` (projection)
+* `20261121000300_stock_rpc` — `apply_stock_movements` (idempotent batch), read functions
+* `20261121000400_prices_media_search` — price tiers, `resolve_sale_price`, product image paths and storage policies, brand search
+
+Packages: domain stock/pricing/CSV/import rules; data-layer repositories, IndexedDB outbox and sync
+engine; web screens for stock, movements, warehouses, labels, product import and image/tier editing.
+
+### Verified in this environment
+
+| Check | Result |
+| --- | --- |
+| Lint, typecheck | pass |
+| Unit tests (domain 63, data 48, web 33, i18n 15, ui 4) | pass |
+| Database tests on PostgreSQL 16 (82, incl. RLS, idempotency, partial batches, audit, storage policies) | pass |
+| Static production build (16 routes) | pass |
+| Headless browser smoke test of the built pages (configuration screen, no overflow at 390 px) | pass |
+
+### Not verified (be explicit)
+
+* **PostgREST API suite** (`tests/db/src/api/inventory-offline.test.ts`): written, not run. The
+  PostgREST binary could not be executed here (blocked by a safety check; the download exists but was
+  not run).
+* **Supabase Auth, real Storage service, and any signed-in browser flow** (scan → queue → sync against a
+  live project). The storage policies are tested only against a shim.
+* **Camera barcode scanning** is not implemented (keyboard-wedge scanners work).
+* **Background sync** when the app is closed is not implemented (Phase 7 / PWA).
+
+### Known limitations
+See [offline-sync.md](./offline-sync.md#limits-honest-list) and [inventory.md](./inventory.md#not-in-phase-2).

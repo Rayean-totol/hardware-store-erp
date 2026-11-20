@@ -1,11 +1,15 @@
 import {
   createBrowserClient,
   createSupabaseCatalogRepository,
+  createSupabaseInventoryRepository,
   createSupabaseOrgRepository,
+  createSupabaseSyncTransport,
   DataError,
   toDataError,
   type CatalogRepository,
+  type InventoryRepository,
   type OrgRepository,
+  type SyncTransport,
 } from '@erp/data';
 
 export interface AuthUser {
@@ -27,6 +31,17 @@ export interface Services {
   auth: AuthService;
   catalog: CatalogRepository;
   org: OrgRepository;
+  inventory: InventoryRepository;
+  /** Backend access for the offline sync engine (same RLS-protected RPCs as the online screens). */
+  syncTransport: SyncTransport;
+  productImages: ProductImageStore;
+}
+
+export interface ProductImageStore {
+  /** Uploads to bucket "product-images" as <org>/<product>/<timestamp>.<ext>; returns the object path. */
+  upload(orgId: string, productId: string, file: File, extension: string): Promise<string>;
+  /** Short-lived signed URL for a private object. */
+  signedUrl(path: string): Promise<string>;
 }
 
 export function createSupabaseServices(config: { url: string; anonKey: string }, deviceId: string): Services {
@@ -59,9 +74,28 @@ export function createSupabaseServices(config: { url: string; anonKey: string },
     },
   };
 
+  const catalog = createSupabaseCatalogRepository(client);
+  const inventory = createSupabaseInventoryRepository(client);
+  const bucket = client.storage.from('product-images');
+  const productImages: ProductImageStore = {
+    async upload(orgId, productId, file, extension) {
+      const path = `${orgId}/${productId}/${Date.now()}.${extension}`;
+      const { error } = await bucket.upload(path, file, { contentType: file.type, upsert: false });
+      if (error) throw new DataError('storage.upload_failed', error.message, null, error);
+      return path;
+    },
+    async signedUrl(path) {
+      const { data, error } = await bucket.createSignedUrl(path, 60 * 60);
+      if (error || !data) throw new DataError('storage.url_failed', error?.message ?? 'no URL returned', null, error);
+      return data.signedUrl;
+    },
+  };
   return {
     auth,
-    catalog: createSupabaseCatalogRepository(client),
+    catalog,
     org: createSupabaseOrgRepository(client),
+    inventory,
+    syncTransport: createSupabaseSyncTransport(client, inventory, catalog),
+    productImages,
   };
 }

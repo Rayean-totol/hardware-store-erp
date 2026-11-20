@@ -5,3 +5,7 @@ export * from './rows';
 export * from './mappers';
 export * from './catalog-repository';
 export * from './org-repository';
+export * from './inventory-models';
+export * from './inventory-repository';
+export * from './offline';
+export * from './product-io';

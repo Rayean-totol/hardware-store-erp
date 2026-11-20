@@ -84,7 +84,7 @@ pnpm build              # static export into apps/web/out
 | --- | --- | --- |
 | `pnpm test` | nothing | domain rules, i18n catalogs, data-layer mapping, UI components |
 | `pnpm test:db` | PostgreSQL 15+ (superuser) | migrations, constraints, RLS, RPCs, audit log, permission-matrix drift |
-| `pnpm test:api` | the above + PostgREST binary | `@erp/data` repositories through real PostgREST with signed JWTs |
+| `pnpm test:api` | the above + PostgREST binary | `@erp/data` repositories and the offline engine through real PostgREST with signed JWTs. **Not yet run in CI-equivalent conditions; see the note below** |
 | `pnpm lint` / `pnpm typecheck` | nothing | ESLint, TypeScript |
 
 Database tests create (and drop) a database called `erp_test`. They apply
@@ -101,6 +101,17 @@ pnpm test:api
 ```
 
 Tests fail loudly if the database or PostgREST is unreachable. They are never silently skipped.
+
+> **Phase 2 status:** the API suite (`tests/db/src/api/`) is written but was **not executed** when
+> Phase 2 was built: the PostgREST binary could not be verified in that environment. Run
+> `scripts/fetch-postgrest.sh && pnpm test:api` and expect to fix small issues on first run.
+
+### Offline and barcode dependencies
+
+* `idb` (IndexedDB wrapper) is used by the browser app; `fake-indexeddb` is used by tests only.
+* `bwip-js` renders barcode labels in the browser (`apps/web/src/features/labels`).
+* Offline storage needs IndexedDB. Without it the app runs but shows a warning that queued changes
+  are lost on reload.
 
 ### Manually resetting a plain-Postgres dev database
 
