@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@erp/ui';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Download, Pencil, Plus, Printer, Search, Upload } from 'lucide-react';
+import { Archive, ArchiveRestore, Download, LayoutGrid, List, Pencil, Plus, Printer, Search, Upload } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
@@ -29,8 +29,11 @@ import { PageHeader } from '@/components/page-header';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
+import { readPref, writePref } from '@/lib/storage';
 import { exportProductsCsv } from '@erp/data';
 import { catalogKeys, useBrands, useCategories, useUnits } from './use-catalog-data';
+import { PRODUCT_VIEW_PREF, type ProductView, parseProductView } from './catalog-view';
+import { ProductCard } from './product-card';
 
 const PAGE_SIZE = 25;
 
@@ -59,6 +62,13 @@ export function ProductList() {
   const [page, setPage] = React.useState(0);
   const [confirm, setConfirm] = React.useState<Product | null>(null);
   const debouncedSearch = useDebounced(search, 250);
+  // Grid is the default. The saved choice is read after mount so server and client markup match.
+  const [view, setView] = React.useState<ProductView>('grid');
+  React.useEffect(() => setView(parseProductView(readPref(PRODUCT_VIEW_PREF))), []);
+  const changeView = (next: ProductView) => {
+    setView(next);
+    writePref(PRODUCT_VIEW_PREF, next);
+  };
 
   React.useEffect(() => setPage(0), [debouncedSearch, categoryId, brandId, includeArchived]);
 
@@ -94,6 +104,30 @@ export function ProductList() {
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const unitLabel = (u: Unit | undefined) => (u ? name(u) : '?');
+  const brandById = React.useMemo(() => new Map((brands.data ?? []).map((b) => [b.id, b])), [brands.data]);
+
+  const gridBody = (products.data?.items.length ?? 0) > 0 ? (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" aria-busy={products.isFetching}>
+      {products.data?.items.map((p) => {
+        const priced = p.units.find((u) => u.isBase && u.salePrice) ?? p.units.find((u) => u.salePrice);
+        const category = p.categoryId ? categoryById.get(p.categoryId) : undefined;
+        const brand = p.brandId ? brandById.get(p.brandId) : undefined;
+        return (
+          <ProductCard
+            key={p.id}
+            product={p}
+            displayName={name(p)}
+            categoryName={category ? name(category) : null}
+            categoryNameEn={category?.nameEn ?? null}
+            brandName={brand?.name ?? null}
+            priceLabel={priced?.salePrice ? `${fmt.money(priced.salePrice)} / ${unitLabel(unitById.get(priced.unitId))}` : null}
+          />
+        );
+      })}
+    </div>
+  ) : (
+    <Card className="py-10 text-center text-muted-foreground">{t('products.empty')}</Card>
+  );
 
   async function exportCsv() {
     setExporting(true);
@@ -182,16 +216,42 @@ export function ProductList() {
           <Checkbox checked={includeArchived} onChange={(e) => setIncludeArchived(e.target.checked)} />
           {t('products.include_archived')}
         </label>
+        <div role="group" aria-label={t('products.view_label')} className="flex gap-1 md:ms-auto">
+          <Button
+            type="button"
+            variant={view === 'grid' ? 'default' : 'outline'}
+            size="icon"
+            aria-pressed={view === 'grid'}
+            aria-label={t('products.view_grid')}
+            title={t('products.view_grid')}
+            onClick={() => changeView('grid')}
+          >
+            <LayoutGrid aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            variant={view === 'list' ? 'default' : 'outline'}
+            size="icon"
+            aria-pressed={view === 'list'}
+            aria-label={t('products.view_list')}
+            title={t('products.view_list')}
+            onClick={() => changeView('list')}
+          >
+            <List aria-hidden="true" />
+          </Button>
+        </div>
       </div>
 
       {products.error ? <ErrorAlert error={products.error} onRetry={() => void products.refetch()} /> : null}
       {exportError ? <ErrorAlert error={exportError} /> : null}
       {archive.error ? <ErrorAlert error={archive.error} /> : null}
 
-      <Card>
-        {products.isPending ? (
-          <div className="p-6"><Spinner label={t('common.loading')} /></div>
-        ) : (
+      {products.isPending ? (
+        <Card><div className="p-6"><Spinner label={t('common.loading')} /></div></Card>
+      ) : view === 'grid' ? (
+        gridBody
+      ) : (
+        <Card>
           <Table aria-busy={products.isFetching}>
             <TableHeader>
               <TableRow>
@@ -267,8 +327,8 @@ export function ProductList() {
               })}
             </TableBody>
           </Table>
-        )}
-      </Card>
+        </Card>
+      )}
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
         <span>{t('products.count', { count: fmt.number(total) })}</span>
