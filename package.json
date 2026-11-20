@@ -1,0 +1,31 @@
+{
+  "name": "hardware-store-erp",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @erp/web dev",
+    "build": "pnpm --filter @erp/web build",
+    "typecheck": "pnpm -r --parallel typecheck",
+    "lint": "eslint .",
+    "test": "pnpm -r --filter=!@erp/db-tests test",
+    "test:db": "pnpm --filter @erp/db-tests test:db",
+    "test:api": "pnpm --filter @erp/db-tests test:api",
+    "test:all": "pnpm test && pnpm test:db && pnpm test:api",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
+    "prettier": "^3.10.1",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vitest": "^4.1.12"
+  },
+  "type": "module"
+}

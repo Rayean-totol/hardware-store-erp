@@ -1,0 +1,22 @@
+{
+  "name": "@erp/db-tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:db": "vitest run --config vitest.db.config.ts",
+    "test:api": "vitest run --config vitest.api.config.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@erp/data": "workspace:*",
+    "@supabase/supabase-js": "^2.119.2",
+    "@types/node": "^26.6.6",
+    "@types/pg": "^8.23.1",
+    "jose": "^6.2.18",
+    "pg": "^8.23.1"
+  },
+  "dependencies": {
+    "@erp/domain": "workspace:*"
+  }
+}

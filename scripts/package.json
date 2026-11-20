@@ -1,0 +1,12 @@
+{
+  "name": "@erp/scripts",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "demo-users": "node create-demo-users.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.2"
+  }
+}

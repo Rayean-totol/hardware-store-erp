@@ -1,0 +1,28 @@
+# Minimal Supabase CLI configuration. See docs/setup.md.
+# If your CLI version rejects a key, run `supabase init` and port these settings.
+project_id = "hardware-store-erp"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
