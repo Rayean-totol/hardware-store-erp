@@ -221,9 +221,12 @@ describe('archive', () => {
     });
   });
 
-  it('products cannot be deleted', async () => {
-    const res = await asUser(USERS.owner, (sql) => sql(`delete from public.products where sku = 'TLS-HAM-16'`));
-    expect(res.rowCount).toBe(0);
+  it('products cannot be deleted (no DELETE privilege; archive instead)', async () => {
+    // Hardened: the role has no DELETE grant at all, so the statement is refused outright.
+    await expectDbError(
+      asUser(USERS.owner, (sql) => sql(`delete from public.products where sku = 'TLS-HAM-16'`)),
+      /permission denied/,
+    );
   });
 });
 

@@ -79,6 +79,28 @@ the transactional tables from Phase 2 onwards.
 | `apply_stock_movements` | definer (checks membership, then per-item permission and branch access) | The only stock writer; idempotent; item isolation |
 | `list_stock_levels`, `list_low_stock`, `list_stock_movements` | invoker (RLS applies) | Stock read models |
 
+## Least-privilege grants (hardening migration 20261122000100)
+
+Table privileges for `authenticated` are exactly the set below; `anon` has none. Everything else,
+including every TRUNCATE, REFERENCES and TRIGGER privilege, is revoked. `tests/db/src/db/hardening.test.ts`
+checks this matrix on every table.
+
+| Table group | Privileges |
+| --- | --- |
+| audit_log, permissions, roles, role_permissions, stock_levels, stock_movements | SELECT |
+| organizations, profiles | SELECT, UPDATE |
+| branches, brands, product_categories, products, units, warehouses | SELECT, INSERT, UPDATE |
+| memberships, membership_branches, product_units, product_prices | SELECT, INSERT, UPDATE, DELETE |
+
+The stock ledger additionally refuses TRUNCATE for every role. Functions: PUBLIC and anon may not
+execute anything in `public` or `app`; authenticated may execute the twelve public RPCs and the app
+helpers that RLS needs.
+
+Auth trigger: the profile name is capped at 200 characters, and the profile e-mail follows
+`auth.users` when the address changes.
+
+Storage: product-image writes must reference an existing product of the same organization.
+
 ## Known gaps and follow-ups
 
 * **Custom roles** are not editable yet. When added, editing a role must not grant permissions
