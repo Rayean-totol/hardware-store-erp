@@ -1,42 +1,59 @@
-# Offline sync — design (Phase 2)
+# Offline sync (Phase 2 — implemented)
 
-> Status: design only. Phase 1 is online-only. The Phase 1 schema already follows the rules below.
+Read with [adr/0006](./adr/0006-offline-stock-outbox.md) and [inventory.md](./inventory.md).
 
-## Principles
+## What works, and how it was tested
 
-1. **The server is authoritative for master data; devices are authoritative for what physically
-   happened.** A sale made offline happened. The server must accept it, even if stock went negative
-   or the price changed meanwhile. It records an exception for review instead of rejecting it.
-2. **Commands, not row diffs.** The client records intent (`pos.sale.create`, `catalog.product.save`)
-   in an outbox with the full payload and a client-generated ID. Replaying a command is
-   idempotent: same ID, same result.
-3. **Monotonic per-device sequences.** Document numbers are `{branch}-{device}-{seq}`, allocated
-   locally, so they can never collide.
-4. **Pull by cursor.** Each synced table exposes `row_version` and `updated_at`. Devices pull
-   rows changed since their last cursor, scoped by RLS to what the user may see.
+| Guarantee | Test |
+| --- | --- |
+| Movements are queued without the network, and the device shows the result immediately | `packages/data/test/sync-engine.test.ts` (queueing and projection) |
+| A network failure before the server applies a batch keeps everything queued with back-off | `sync-engine.test.ts` ("network failure keeps everything queued") |
+| A lost response (server applied, device did not hear) does not double-count after retry | `sync-engine.test.ts` ("lost response"); **API version through PostgREST:** `tests/db/src/api/inventory-offline.test.ts` (not yet run) |
+| A failed snapshot refresh keeps acknowledged movements visible until the snapshot is stored | `sync-engine.test.ts` ("failed snapshot refresh") |
+| Rejected movements stay visible with the server's code; retry or discard | `sync-engine.test.ts`, `packages/data/test/store-contract.test.ts`, `apps/web/test/inventory.test.tsx` |
+| Restart: a new engine on the same store finishes the queue | `sync-engine.test.ts` ("survives a restart") |
+| Back-off blocks later movements so the device order is kept | `sync-engine.test.ts` |
+| IndexedDB keeps the outbox across a reopen | `store-contract.test.ts` (fake-indexeddb) |
+| The database rejects duplicate ids and applies each id once | `tests/db/src/db/inventory.test.ts` |
 
-## Components
+## Model
 
 ```
-UI ─► repository (same interface as online) ─► local store (SQLite / IndexedDB)
-                                               │
-                                               ├─► outbox (command, payload, id, attempts, last_error)
-                                               │        └─► push worker ─► RPC (idempotent) ─► Postgres
-                                               └─◄ pull worker ◄─ select … where row_version > cursor
+device                                         server
+──────                                         ──────
+outbox: pending → acked → (removed)            apply_stock_movements(batch)
+        pending → failed (kept for review)       ├ new client_id   → applied
+                                                 ├ known client_id → duplicate (no effect)
+snapshot per warehouse (server levels)           └ invalid         → rejected (code)
+projection = snapshot + outbox (in seq order)
 ```
 
-* Browser: IndexedDB (Dexie). Capacitor: `@capacitor-community/sqlite`. Tauri: `tauri-plugin-sql`
-  (SQLite). The storage driver sits behind one interface.
-* Conflicts on master data: the client sends `row_version`. A stale write gets
-  `concurrency_conflict`, and the user sees both versions and decides. Conflicts on
-  transactional data cannot happen, because each document is append-only and owned by its device.
-* Failed commands are never dropped silently. They stay in the outbox with the error visible in
-  a "Sync issues" screen until resolved.
+* Local validation (`enqueue`) runs the same checks as the server, so the user sees problems before
+  queueing: unknown or service products, unit not configured, fractions, precision, cost, reason,
+  and overdraw when the org disallows negative stock.
+* `flush()` is single-flight. Batches are at most 50 movements. A transport error keeps the batch
+  queued and sets an exponential back-off (1 s doubling, capped at 5 min).
+* After acknowledgement the warehouse snapshot is refreshed, and the acknowledged entries are removed
+  in the same IndexedDB transaction.
+* The catalog (products, units, barcodes, reorder levels, the org's negative-stock policy) is
+  cached for offline lookup and validation. Downloading it requires a connection.
 
-## Phase 1 schema readiness checklist
+## Limits (honest list)
 
-- [x] UUID PKs with `gen_random_uuid()` default, client may supply its own
-- [x] `row_version` and `updated_at` maintained by `app.touch_row()`
-- [x] Optimistic concurrency in `save_product` (`p_expected_version`)
-- [x] Soft archive instead of delete for products
-- [x] `x-device-id` header captured in the audit log
+* **Verification gap:** the PostgREST path (JSON shapes, RLS through HTTP) is covered by tests that
+  have not run in this environment. Run `scripts/fetch-postgrest.sh && pnpm test:api` before relying on it.
+* **Only while the app runs.** Queued work is sent when the page is open and online, on the `online`
+  event and every 20 s. Nothing sends it when the browser is closed; that needs a service worker
+  (PWA) or the native background tasks of Phase 7.
+* **Multiple tabs are untested.** Two tabs of the same app would share one outbox and each run an
+  engine. The server's idempotency should prevent double-counting, but local reads can show briefly
+  stale figures and that has not been tested. Keep one tab open.
+* **Negative stock is not reviewed.** Two devices can sell the last unit at the same time. With
+  negative stock allowed (the default) both succeed and the balance goes negative, flagged
+  `negative_stock`. A review screen does not exist yet.
+* **Master data** is not synchronised offline. Product edits need a connection; the only protection is
+  the optimistic version check on `save_product`.
+* **Full snapshots per warehouse** instead of deltas. Fine at hardware-store scale; revisit when a
+  warehouse has tens of thousands of products.
+* **Clock:** `occurred_at` is the device clock. A wrong device clock records wrong times. Server time
+  (`recorded_at`) is always correct and is what history sorts by.

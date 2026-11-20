@@ -35,6 +35,7 @@ export interface ProductUnit extends ProductUnitDef {
 export interface Product extends Omit<ProductDraft, 'units' | 'id'> {
   id: string;
   archivedAt: string | null;
+  imagePath: string | null;
   updatedAt: string;
   rowVersion: number;
   units: ProductUnit[];
@@ -44,6 +45,7 @@ export interface ProductQuery {
   orgId: string;
   search?: string;
   categoryId?: string | null;
+  brandId?: string | null;
   includeArchived?: boolean;
   limit: number;
   offset: number;

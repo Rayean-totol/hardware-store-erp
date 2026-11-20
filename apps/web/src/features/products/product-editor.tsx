@@ -9,6 +9,7 @@ import { PageHeader } from '@/components/page-header';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
+import { ProductExtras } from './product-extras';
 import { ProductForm } from './product-form';
 import { catalogKeys, useBrands, useCategories, useUnits } from './use-catalog-data';
 
@@ -90,6 +91,7 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         onCancel={() => router.push('/products/')}
         onReload={() => void product.refetch()}
       />
+      {product.data ? <ProductExtras product={product.data} /> : null}
     </>
   );
 }

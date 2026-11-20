@@ -57,12 +57,13 @@ export async function setup(): Promise<void> {
     await member(DEMO_ORG, USERS.cashier, 'cashier', false);
     await member(DEMO_ORG, USERS.auditor, 'auditor');
     await member(OTHER_ORG, USERS.outsider, 'owner');
-    // Manager is assigned to the Riyadh branch only.
+    // Manager and cashier are restricted to the Riyadh branch (matches scripts/create-demo-users.mjs).
+    // Without these rows a branch-restricted member sees no branch at all.
     await db.query(
       `insert into public.membership_branches (membership_id, org_id, branch_id)
        select m.id, m.org_id, b.id from public.memberships m join public.branches b on b.org_id = m.org_id and b.code = 'RUH'
-       where m.user_id = $1`,
-      [USERS.manager],
+       where m.user_id = any($1::uuid[])`,
+      [[USERS.manager, USERS.cashier]],
     );
   } finally {
     await db.end();

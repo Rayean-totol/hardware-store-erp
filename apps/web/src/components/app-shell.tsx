@@ -2,12 +2,13 @@
 
 import { localName } from '@erp/i18n';
 import { Button, cn, NativeSelect, Spinner } from '@erp/ui';
-import { Boxes, LogOut, Package, Tags, Users } from 'lucide-react';
+import { Boxes, ClipboardList, LogOut, Package, Printer, Tags, Users, Warehouse as WarehouseIcon } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import * as React from 'react';
 import { useI18n } from '@/providers/i18n-provider';
 import { useSession } from '@/providers/session-provider';
+import { SyncProvider } from '@/providers/sync-provider';
 import { ErrorAlert } from './error-message';
 import { LanguageSwitcher } from './language-switcher';
 
@@ -40,11 +41,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const nav = [
     { href: '/products/', label: t('nav.products'), icon: Package, show: session.can('catalog.read') },
+    { href: '/inventory/', label: t('nav.inventory'), icon: ClipboardList, show: session.can('inventory.read') },
+    { href: '/warehouses/', label: t('nav.warehouses'), icon: WarehouseIcon, show: session.can('inventory.read') },
+    { href: '/labels/', label: t('nav.labels'), icon: Printer, show: session.can('catalog.read') },
     { href: '/catalog/', label: t('nav.catalog_setup'), icon: Tags, show: session.can('catalog.read') },
     { href: '/team/', label: t('nav.team'), icon: Users, show: session.can('users.manage') },
   ].filter((n) => n.show);
 
   return (
+    <SyncProvider>
     <div className="flex min-h-dvh flex-col md:flex-row">
       <aside className="flex shrink-0 flex-col gap-4 border-b bg-card p-4 md:w-64 md:border-e md:border-b-0">
         <div className="flex items-center gap-2 font-semibold">
@@ -104,5 +109,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
       <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
     </div>
+    </SyncProvider>
   );
 }

@@ -25,6 +25,10 @@
 | catalog.write | ✓ | ✓ | ✓ | ✓ | | | |
 | catalog.price_write | ✓ | ✓ | ✓ | | | | |
 | catalog.archive | ✓ | ✓ | ✓ | | | | |
+| warehouse.manage | ✓ | ✓ | | | | | |
+| inventory.read | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| inventory.move (stock in/out) | ✓ | ✓ | ✓ | ✓ | | | |
+| inventory.adjust | ✓ | ✓ | ✓ | | | | |
 
 Extra rules enforced by triggers:
 
@@ -48,6 +52,11 @@ Extra rules enforced by triggers:
 | membership_branches | self or `users.manage` | `users.manage` | `users.manage` | `users.manage` |
 | audit_log | `audit.read` | trigger only | never (trigger blocks every role) | never |
 | units | system or `catalog.read` | `catalog.write` (org units) | `catalog.write` (org units) | — |
+| warehouses | `inventory.read` and branch access | `warehouse.manage` and branch access | same | — (deactivate instead) |
+| stock_movements | `inventory.read` and branch access | only `apply_stock_movements()` | **never** (trigger blocks every role) | **never** |
+| stock_levels | `inventory.read` and branch access | only `apply_stock_movements()` | only `apply_stock_movements()` | — |
+| product_prices | `catalog.read` | `catalog.write` **and** `catalog.price_write` (trigger) | same | same |
+| storage `product-images` | org member | `catalog.write` for the org in the path | same | same |
 | product_categories, brands | `catalog.read` | `catalog.write` | `catalog.write` | — |
 | products | `catalog.read` | `catalog.write` | `catalog.write` or `catalog.archive` | — (archive instead) |
 | product_units | `catalog.read` | `catalog.write` | `catalog.write` | `catalog.write` |
@@ -64,7 +73,11 @@ the transactional tables from Phase 2 onwards.
 | `list_members` | definer (checks `users.manage`) | Members with e-mail (auth.users is not exposed) |
 | `get_my_context` | definer (scoped to `auth.uid()`) | Memberships, permissions, branches |
 | `save_product` | invoker (RLS applies) | Atomic product + units save with optimistic locking |
-| `search_products` | invoker (RLS applies) | SKU/name/barcode search |
+| `search_products` | invoker (RLS applies) | SKU/name/barcode/brand search |
+| `save_product_prices` | invoker (RLS and price trigger apply) | Replace price tiers without rewriting unchanged rows |
+| `resolve_sale_price` | invoker | Best price for a quantity |
+| `apply_stock_movements` | definer (checks membership, then per-item permission and branch access) | The only stock writer; idempotent; item isolation |
+| `list_stock_levels`, `list_low_stock`, `list_stock_movements` | invoker (RLS applies) | Stock read models |
 
 ## Known gaps and follow-ups
 

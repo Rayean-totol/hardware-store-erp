@@ -12,8 +12,9 @@ components · Supabase (PostgreSQL, Auth, PostgREST) · TanStack Query · Vitest
 
 | Phase | Scope | State |
 | --- | --- | --- |
-| 1 | Foundation, Auth/RLS, roles, audit log, UI system, i18n, **product catalog** | ✅ implemented and tested |
-| 2–8 | Inventory and offline sync, accounting, purchasing, POS, ZATCA, native shells, reporting | 📐 designed, not built |
+| 1 | Foundation, Auth/RLS, roles, audit log, UI system, i18n, **product catalog** | ✅ merged |
+| 2 | **Inventory**: warehouses, stock ledger, stock in/out/adjustments, costing, price tiers, labels, CSV import/export, offline outbox with idempotent sync | ✅ implemented; PostgREST suite and live Supabase flows not yet run ([details](docs/implementation-plan.md)) |
+| 3–8 | Accounting, purchasing, POS, ZATCA, native shells, reporting | 📐 designed, not built |
 
 > ⚠️ **ZATCA:** this software is **not** ZATCA-compliant yet. E-invoicing is planned for Phase 6
 > and will only be called compliant after validation with ZATCA's SDK, sandbox and simulation
@@ -55,9 +56,9 @@ Full instructions, including demo users and running tests without Docker: **[doc
 
 ```bash
 pnpm lint && pnpm typecheck
-pnpm test        # 79 unit/component tests: domain, i18n, data layer, UI
-pnpm test:db     # 42 tests against real PostgreSQL: RLS, RPCs, constraints, audit, drift checks
-pnpm test:api    # repositories through real PostgREST (needs scripts/fetch-postgrest.sh)
+pnpm test        # 163 unit/component tests: domain, i18n, data layer, offline engine, UI
+pnpm test:db     # 82 tests against real PostgreSQL: RLS, RPCs, idempotency, audit, storage policies
+pnpm test:api    # repositories and offline sync through real PostgREST (needs scripts/fetch-postgrest.sh; not yet run)
 ```
 
 ## Documentation
@@ -65,9 +66,10 @@ pnpm test:api    # repositories through real PostgREST (needs scripts/fetch-post
 * [Architecture](docs/architecture.md): modules, tenancy, offline design, ZATCA approach
 * [Implementation plan](docs/implementation-plan.md): phases and known limitations
 * [Security model](docs/security.md): roles, policies, RPCs, gaps
-* [Offline sync design](docs/offline-sync.md)
+* [Inventory](docs/inventory.md): movements, costing, warehouses, prices, labels, import/export
+* [Offline sync](docs/offline-sync.md): guarantees, tests and limits
 * [ZATCA notes](docs/zatca.md)
-* [ADRs](docs/adr)
+* [ADRs](docs/adr) (0006 offline outbox, 0007 moving-average costing)
 
 ## Repository layout
 
