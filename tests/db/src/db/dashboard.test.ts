@@ -78,7 +78,16 @@ describe('dashboard inventory summary', () => {
       await receive(sql, r.jed, r.screw, r.pcs, '5', '4');
       await sql('select set_config(\'request.jwt.claims\', $1, true)', [JSON.stringify({ sub: USERS.manager, role: 'authenticated' })]);
       expect((await summary(sql)).stock_value).toBe('20');
-      expect((await summary(sql, r.jed)).stock_value).toBe('0');
+      // Explicit refusal, not silent zeros, when asking for a branch the user cannot access.
+      const jedBranch = (await asAdmin((a) => a(`select id from public.branches where org_id = $1 and code = 'JED'`, [DEMO_ORG]))).rows[0].id;
+      await expectDbError(sql('select public.dashboard_inventory_summary($1, $2)', [DEMO_ORG, jedBranch]), 'forbidden');
+    });
+  });
+
+  it('refuses a branch that belongs to another organization', async () => {
+    await asUser(USERS.owner, async (sql) => {
+      const otherBranch = (await asAdmin((a) => a(`select id from public.branches where code = 'MAIN' and org_id <> $1 limit 1`, [DEMO_ORG]))).rows[0].id;
+      await expectDbError(sql('select public.dashboard_inventory_summary($1, $2)', [DEMO_ORG, otherBranch]), 'not_found');
     });
   });
 
