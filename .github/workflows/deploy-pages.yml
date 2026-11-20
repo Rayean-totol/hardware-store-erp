@@ -1,0 +1,60 @@
+name: Deploy web app to GitHub Pages
+
+# Publishes the static export of apps/web to GitHub Pages.
+# Required repository VARIABLES (Settings → Secrets and variables → Actions → Variables):
+#   NEXT_PUBLIC_SUPABASE_URL       https://<project-ref>.supabase.co
+#   NEXT_PUBLIC_SUPABASE_ANON_KEY  the publishable key (public by design; never a secret key)
+# Never add a database password or a service_role / sb_secret_ key here: they would be inlined
+# into the JavaScript that every visitor downloads. scripts/check-public-key.mjs refuses them.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check configuration
+        env:
+          SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+        run: |
+          test -n "$SUPABASE_URL" || { echo "Missing repository variable NEXT_PUBLIC_SUPABASE_URL"; exit 1; }
+          test -n "$SUPABASE_KEY" || { echo "Missing repository variable NEXT_PUBLIC_SUPABASE_ANON_KEY"; exit 1; }
+          node scripts/check-public-key.mjs "$SUPABASE_KEY"
+      - name: Build static export
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          NEXT_PUBLIC_BASE_PATH: /${{ github.event.repository.name }}
+          NEXT_TELEMETRY_DISABLED: 1
+        run: pnpm --filter @erp/web build
+      - name: Prevent Jekyll from hiding _next
+        run: touch apps/web/out/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/out
+      - id: deployment
+        uses: actions/deploy-pages@v4
