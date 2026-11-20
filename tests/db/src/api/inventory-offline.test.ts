@@ -16,13 +16,17 @@ import {
 import { clientFor } from '../api-client';
 import { DEMO_ORG, USERS } from '../env';
 
-async function setup(user: string, device = 'API-DEVICE') {
+// Cashiers and managers are restricted to the RUH branch (see tests/db/src/global-setup.ts),
+// so each user works in a warehouse they can actually see. RLS hides the others.
+async function setup(user: string, device = 'API-DEVICE', warehouseCode = 'JED') {
   const client = await clientFor(user, device);
   const inventory = createSupabaseInventoryRepository(client);
   const catalog = createSupabaseCatalogRepository(client);
   const transport = createSupabaseSyncTransport(client, inventory, catalog);
   const warehouses = await inventory.listWarehouses(DEMO_ORG);
-  const warehouseId = warehouses.find((w) => w.code === 'JED')!.id;
+  const found = warehouses.find((w) => w.code === warehouseCode);
+  if (!found) throw new Error(`warehouse ${warehouseCode} is not visible to ${user}`);
+  const warehouseId = found.id;
   const products = (await catalog.searchProducts({ orgId: DEMO_ORG, search: 'FST-HB', limit: 5, offset: 0 })).items;
   const bolt = products.find((p) => p.sku === 'FST-HB-M10X50')!;
   return { client, inventory, catalog, transport, warehouseId, bolt };
@@ -32,7 +36,7 @@ const unitOf = (bolt: { units: Array<{ unitId: string; isBase: boolean }> }) => 
 
 describe('catalog cache download (PostgREST)', () => {
   it('loads products with units and the organization stock policy', async () => {
-    const { transport } = await setup(USERS.cashier);
+    const { transport } = await setup(USERS.cashier, 'API-DEVICE', 'RUH');
     const cache = await transport.loadCatalog(DEMO_ORG);
     expect(cache.allowNegativeStock).toBe(true);
     expect(cache.products.length).toBeGreaterThanOrEqual(12);
@@ -59,7 +63,7 @@ describe('stock movements (PostgREST RPC)', () => {
   });
 
   it('a cashier gets a per-item rejection, not an exception', async () => {
-    const { inventory, warehouseId, bolt } = await setup(USERS.cashier);
+    const { inventory, warehouseId, bolt } = await setup(USERS.cashier, 'API-DEVICE', 'RUH');
     const [res] = await inventory.applyMovements(DEMO_ORG, 'API-DEVICE', [{
       clientId: crypto.randomUUID(), warehouseId, productId: bolt.id, movementType: 'stock_in', unitId: unitOf(bolt),
       quantity: '1', unitCost: '1', reasonCode: 'purchase', note: null, reference: null, occurredAt: new Date().toISOString(),
@@ -67,9 +71,14 @@ describe('stock movements (PostgREST RPC)', () => {
     expect(res).toMatchObject({ status: 'rejected', code: 'forbidden' });
   });
 
-  it('a malformed batch fails as a whole with a clear error', async () => {
-    const { inventory } = await setup(USERS.storekeeper);
-    await expect(inventory.applyMovements('not-a-uuid', 'd', [])).rejects.toBeInstanceOf(DataError);
+  it('a malformed request fails as a whole with a clear error', async () => {
+    const { inventory, warehouseId, bolt } = await setup(USERS.storekeeper);
+    // A non-empty batch with a malformed organization id must reach the RPC and fail there.
+    const item: MovementPayload = {
+      clientId: crypto.randomUUID(), warehouseId, productId: bolt.id, movementType: 'stock_in', unitId: unitOf(bolt),
+      quantity: '1', unitCost: '1', reasonCode: 'purchase', note: null, reference: null, occurredAt: new Date().toISOString(),
+    };
+    await expect(inventory.applyMovements('not-a-uuid', 'API-DEVICE', [item])).rejects.toBeInstanceOf(DataError);
   });
 });
 
@@ -91,14 +100,16 @@ describe('offline engine end-to-end through PostgREST', () => {
         return results;
       },
     };
+    let clock = Date.now();
     const engine = new SyncEngine({
       orgId: DEMO_ORG, deviceId: 'POS-OFFLINE-1', store: createMemoryStore(), transport: flaky,
-      now: () => Date.now() + 10 * 60_000,   // past any back-off
+      now: () => clock,
     });
     await engine.refreshCatalog();
     await engine.enqueue({ warehouseId, productId: bolt.id, unitId: unitOf(bolt), movementType: 'stock_in', quantity: '7', unitCost: '1', reasonCode: 'purchase' });
     const first = await engine.flush();
     expect(first.networkError).toMatch(/connection reset/);
+    clock += 60_000;                       // let the back-off elapse, as real time would
     const second = await engine.flush();
     expect(second.acked).toBe(1);
     // Exactly one receipt of 7 landed, even though the batch was sent twice.
@@ -109,7 +120,7 @@ describe('offline engine end-to-end through PostgREST', () => {
   });
 
   it('a server rejection reaches the device as a failed entry with the server code', async () => {
-    const { transport, warehouseId, bolt } = await setup(USERS.cashier, 'POS-CASHIER-1');
+    const { transport, warehouseId, bolt } = await setup(USERS.cashier, 'POS-CASHIER-1', 'RUH');
     const engine = new SyncEngine({ orgId: DEMO_ORG, deviceId: 'POS-CASHIER-1', store: createMemoryStore(), transport });
     await engine.refreshCatalog();
     await engine.enqueue({ warehouseId, productId: bolt.id, unitId: unitOf(bolt), movementType: 'stock_in', quantity: '1', unitCost: '1', reasonCode: 'purchase' });
