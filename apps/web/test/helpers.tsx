@@ -94,6 +94,7 @@ export function fakeServices(opts: { role?: SystemRole; products?: Product[] } =
     saveWarehouse: vi.fn(),
     listStockLevels: vi.fn(async () => []),
     listLowStock: vi.fn(async () => []),
+    getInventorySummary: vi.fn(async () => ({ stockValue: '0', stockPositions: 0, outOfStockCount: 0, lowStockCount: 0, productCount: 0 })),
     listMovements: vi.fn(async () => []),
     applyMovements: vi.fn(async () => []),
     listPriceTiers: vi.fn(async () => []),

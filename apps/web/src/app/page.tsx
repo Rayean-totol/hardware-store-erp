@@ -8,7 +8,7 @@ import { useI18n } from '@/providers/i18n-provider';
 export default function Home() {
   const router = useRouter();
   const { t } = useI18n();
-  React.useEffect(() => router.replace('/products/'), [router]);
+  React.useEffect(() => router.replace('/dashboard/'), [router]);
   return (
     <main className="flex min-h-dvh items-center justify-center">
       <Spinner label={t('common.loading')} />

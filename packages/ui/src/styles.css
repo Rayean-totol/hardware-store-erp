@@ -1,5 +1,6 @@
 /*
- * Design tokens (shadcn/ui conventions) for Tailwind CSS v4.
+ * Al Qureshi Hardware ERP Pro — premium dark design tokens (Tailwind CSS v4).
+ * Dark is the only theme, taken from the approved dashboard and products references.
  * Import AFTER `@import "tailwindcss";` in the app stylesheet.
  * Use logical utilities (ms-/me-/ps-/pe-/start-/end-/text-start) everywhere so RTL needs no overrides.
  */
@@ -22,73 +23,57 @@
   --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--success);
   --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-purple: var(--purple);
+  --color-orange: var(--orange);
+  --color-cyan: var(--cyan);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-border: var(--sidebar-border);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 6px);
   --font-sans: 'Noto Sans Variable', 'Noto Sans Arabic Variable', 'Noto Sans Bengali Variable', system-ui, sans-serif;
 }
 
 :root {
-  --radius: 0.5rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.21 0.02 255);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.21 0.02 255);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.21 0.02 255);
-  /* Deep teal-blue primary: readable on white, distinct from status colours */
-  --primary: oklch(0.45 0.11 235);
-  --primary-foreground: oklch(0.98 0 0);
-  --secondary: oklch(0.96 0.01 250);
-  --secondary-foreground: oklch(0.25 0.03 255);
-  --muted: oklch(0.96 0.01 250);
-  --muted-foreground: oklch(0.5 0.02 255);
-  --accent: oklch(0.95 0.015 235);
-  --accent-foreground: oklch(0.25 0.03 255);
-  --destructive: oklch(0.55 0.2 27);
-  --destructive-foreground: oklch(0.98 0 0);
-  --success: oklch(0.52 0.13 150);
-  --warning: oklch(0.58 0.14 70);
-  --border: oklch(0.91 0.01 250);
-  --input: oklch(0.88 0.01 250);
-  --ring: oklch(0.45 0.11 235);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: oklch(0.17 0.015 255);
-    --foreground: oklch(0.96 0.005 250);
-    --card: oklch(0.21 0.015 255);
-    --card-foreground: oklch(0.96 0.005 250);
-    --popover: oklch(0.21 0.015 255);
-    --popover-foreground: oklch(0.96 0.005 250);
-    --primary: oklch(0.72 0.11 230);
-    --primary-foreground: oklch(0.17 0.02 255);
-    --secondary: oklch(0.27 0.015 255);
-    --secondary-foreground: oklch(0.96 0.005 250);
-    --muted: oklch(0.27 0.015 255);
-    --muted-foreground: oklch(0.7 0.015 250);
-    --accent: oklch(0.29 0.02 240);
-    --accent-foreground: oklch(0.96 0.005 250);
-    --destructive: oklch(0.65 0.19 25);
-    --destructive-foreground: oklch(0.98 0 0);
-    --success: oklch(0.72 0.14 150);
-    --warning: oklch(0.78 0.13 75);
-    --border: oklch(0.32 0.015 255);
-    --input: oklch(0.36 0.015 255);
-    --ring: oklch(0.72 0.11 230);
-  }
+  color-scheme: dark;
+  --radius: 0.875rem;
+  --background: #070d1a;
+  --foreground: #e7edf8;
+  --card: #0f1828;
+  --card-foreground: #e7edf8;
+  --popover: #111c2f;
+  --popover-foreground: #e7edf8;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #16233a;
+  --secondary-foreground: #e7edf8;
+  --muted: #16233a;
+  --muted-foreground: #8b99b2;
+  --accent: #1b2a45;
+  --accent-foreground: #e7edf8;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --info: #38bdf8;
+  --purple: #a855f7;
+  --orange: #f97316;
+  --cyan: #06b6d4;
+  --sidebar: #0a1222;
+  --sidebar-border: #17233a;
+  --border: #1d2a42;
+  --input: #22304c;
+  --ring: #3b82f6;
 }
 
 @layer base {
   * {
     border-color: var(--color-border);
-  }
-  html {
-    color-scheme: light dark;
   }
   body {
     background-color: var(--color-background);

@@ -23,6 +23,7 @@ const APPLIED_CHECKSUMS: Record<string, string> = {
   '20261121000200_stock_ledger.sql': '3945d884b613b65acc9d1095227a70b35be1f9e1c75b953c8c963a17f1ffd8ff',
   '20261121000300_stock_rpc.sql': '67bd8a05030d1b5e9714d5597023614f75066099d617fae7235139528e577594',
   '20261121000400_prices_media_search.sql': 'f57c53904a7bfde99a9de631ad8d67a8a394d8182e350331f3c4ec97ed0d6a54',
+  '20261122000100_security_hardening.sql': 'd5a3c0e001e83f5d5c1c0f817182c202a0d7d56650aebe4c5e25ba9ce4ba2f59',
 };
 
 const sha = (f: string) => createHash('sha256').update(readFileSync(resolve(DIR, f))).digest('hex');
@@ -33,8 +34,8 @@ describe('migration set', () => {
     expect(new Set(FILES).size).toBe(FILES.length);
   });
 
-  it('the hardening migration is the last one in apply order', () => {
-    expect(FILES.at(-1)).toBe('20261122000100_security_hardening.sql');
+  it('the newest migration is the last one in apply order', () => {
+    expect(FILES.at(-1)).toBe('20261123000100_dashboard_summary.sql');
   });
 
   it('already-merged migrations are unchanged', () => {
@@ -44,7 +45,7 @@ describe('migration set', () => {
   });
 
   it('every merged migration is accounted for in the checksum list', () => {
-    const unrecorded = FILES.filter((f) => f !== '20261122000100_security_hardening.sql' && !(f in APPLIED_CHECKSUMS));
+    const unrecorded = FILES.filter((f) => f !== '20261123000100_dashboard_summary.sql' && !(f in APPLIED_CHECKSUMS));
     expect(unrecorded).toEqual([]);
   });
 });

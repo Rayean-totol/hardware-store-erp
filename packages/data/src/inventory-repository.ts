@@ -1,6 +1,6 @@
 import type { DbClient } from './client';
 import { toDataError, unwrap, DataError } from './errors';
-import type { ApplyResult, LowStockItem, Movement, MovementPayload, MovementQuery, PriceTierRow, StockLevel, Warehouse } from './inventory-models';
+import type { ApplyResult, InventorySummary, LowStockItem, Movement, MovementPayload, MovementQuery, PriceTierRow, StockLevel, Warehouse } from './inventory-models';
 import type { PriceLevel } from '@erp/domain';
 
 const WAREHOUSE_SELECT = 'id, branch_id, code, name_en, name_ar, name_bn, is_active, row_version';
@@ -64,6 +64,7 @@ export interface InventoryRepository {
   saveWarehouse(input: { id?: string; orgId: string; branchId: string; code: string; nameEn: string; nameAr: string; nameBn: string | null; isActive: boolean }): Promise<Warehouse>;
   listStockLevels(warehouseId: string): Promise<StockLevel[]>;
   listLowStock(orgId: string, branchId?: string | null): Promise<LowStockItem[]>;
+  getInventorySummary(orgId: string, branchId?: string | null): Promise<InventorySummary>;
   listMovements(q: MovementQuery): Promise<Movement[]>;
   /** Sends a batch; resolves with one result per movement (never throws for business rejections). */
   applyMovements(orgId: string, deviceId: string, batch: MovementPayload[]): Promise<ApplyResult[]>;
@@ -104,6 +105,19 @@ export function createSupabaseInventoryRepository(db: DbClient): InventoryReposi
         warehouseId: r.warehouse_id, branchId: r.branch_id, productId: r.product_id, sku: r.sku,
         nameEn: r.name_en, nameAr: r.name_ar, quantity: r.quantity, reorderLevel: r.reorder_level, shortage: r.shortage,
       }));
+    },
+
+    async getInventorySummary(orgId, branchId = null) {
+      const raw = unwrap(await db.rpc('dashboard_inventory_summary', { p_org_id: orgId, p_branch_id: branchId })) as unknown as {
+        stock_value: string; stock_positions: number; out_of_stock_count: number; low_stock_count: number; product_count: number;
+      };
+      return {
+        stockValue: raw.stock_value,
+        stockPositions: Number(raw.stock_positions),
+        outOfStockCount: Number(raw.out_of_stock_count),
+        lowStockCount: Number(raw.low_stock_count),
+        productCount: Number(raw.product_count),
+      };
     },
 
     async listMovements(q) {
