@@ -157,12 +157,15 @@ describe('organization bootstrap and membership', () => {
   });
 
   it('system roles are read-only', async () => {
-    const res = await asUser(USERS.owner, (sql) => sql(`update public.roles set name = 'x' where code = 'cashier'`));
-    expect(res.rowCount).toBe(0);
+    // Hardened: roles/role_permissions have no UPDATE/INSERT grant, so writes are refused outright.
+    await expectDbError(
+      asUser(USERS.owner, (sql) => sql(`update public.roles set name = 'x' where code = 'cashier'`)),
+      /permission denied/,
+    );
     await expectDbError(
       asUser(USERS.owner, (sql) => sql(`insert into public.role_permissions (role_id, permission_code)
         select id, 'users.manage' from public.roles where code = 'cashier'`)),
-      /row-level security/,
+      /permission denied/,
     );
   });
 });

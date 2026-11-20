@@ -85,8 +85,15 @@ describe('price tiers', () => {
 });
 
 describe('product images (Supabase Storage policies, test shim)', () => {
-  const PRODUCT = '50000000-0000-4000-8000-000000000099';
-  const path = `${DEMO_ORG}/${PRODUCT}/front.jpg`;
+  // A real product of the demo organization: uploads must reference an existing product.
+  let PRODUCT = '';
+  let path = '';
+  it('resolves a real product for the image fixtures', async () => {
+    PRODUCT = (await asAdmin((sql) => sql(
+      `select id from public.products where org_id = $1 and sku = 'FST-WS-4X40'`, [DEMO_ORG]))).rows[0].id;
+    path = `${DEMO_ORG}/${PRODUCT}/front.jpg`;
+    expect(PRODUCT).toMatch(/^[0-9a-f-]{36}$/);
+  });
 
   it('image_path must follow the org/product/file layout', async () => {
     await expectDbError(asUser(USERS.owner, (sql) =>
