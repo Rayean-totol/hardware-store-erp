@@ -62,3 +62,31 @@ grant usage on schema public to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 alter default privileges in schema public grant all on functions to anon, authenticated, service_role;
+
+-- -----------------------------------------------------------------------------
+-- Storage (test shim): the tables and helper that Supabase Storage provides.
+-- The real storage service is NOT emulated; only the policy logic is exercised.
+-- -----------------------------------------------------------------------------
+create schema if not exists storage;
+create table if not exists storage.buckets (
+  id     text primary key,
+  name   text not null,
+  public boolean not null default false
+);
+create table if not exists storage.objects (
+  id         uuid primary key default gen_random_uuid(),
+  bucket_id  text references storage.buckets (id),
+  name       text not null,
+  owner      uuid,
+  created_at timestamptz not null default now(),
+  unique (bucket_id, name)
+);
+alter table storage.objects enable row level security;
+create or replace function storage.foldername(name text) returns text[]
+language sql immutable as $$
+  select (string_to_array(name, '/'))[1:array_length(string_to_array(name, '/'), 1) - 1];
+$$;
+grant usage on schema storage to anon, authenticated, service_role;
+grant select, insert, update, delete on storage.objects to authenticated, service_role;
+grant select on storage.buckets to authenticated, service_role;
+grant select on storage.objects to anon;
