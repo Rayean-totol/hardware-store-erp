@@ -1,4 +1,4 @@
-import type { Brand, CatalogRepository, Category, InventoryRepository, MembershipContext, OrgRepository, Product, SyncTransport, Unit, Warehouse } from '@erp/data';
+import type { Brand, CatalogRepository, Category, Customer, InventoryRepository, MembershipContext, OrgRepository, Product, SalesRepository, SyncTransport, Unit, Warehouse } from '@erp/data';
 import { ROLE_PERMISSIONS, type SystemRole } from '@erp/domain';
 import type { Locale } from '@erp/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -41,6 +41,11 @@ export const WAREHOUSES: Warehouse[] = [
   { id: '70000000-0000-4000-8000-000000000001', branchId: '80000000-0000-4000-8000-000000000001', code: 'RUH', nameEn: 'Riyadh', nameAr: 'الرياض', nameBn: null, isActive: true, rowVersion: 1 },
 ];
 
+export const CUSTOMERS: Customer[] = [
+  { id: '90000000-0000-4000-8000-000000000001', name: 'Al Tamimi Build', phone: null, creditAllowed: true },
+  { id: '90000000-0000-4000-8000-000000000002', name: 'Walk-in cash', phone: null, creditAllowed: false },
+];
+
 export const HAMMER: Product = {
   id: '50000000-0000-4000-8000-000000000001', orgId: ORG, sku: 'TLS-HAM-16', nameEn: 'Claw hammer', nameAr: 'مطرقة مخلب', nameBn: null,
   description: null, categoryId: null, brandId: null, productType: 'stock', baseUnitId: UNITS[0]!.id, taxCategory: 'S',
@@ -54,7 +59,8 @@ export const HAMMER: Product = {
 export function membership(role: SystemRole): MembershipContext {
   return {
     membershipId: 'm1', orgId: ORG, orgNameEn: 'Demo Hardware', orgNameAr: 'العدد التجريبية', pricesIncludeVat: true,
-    role, allBranches: true, permissions: [...ROLE_PERMISSIONS[role]], branches: [],
+    role, allBranches: true, permissions: [...ROLE_PERMISSIONS[role]],
+    branches: [{ id: '80000000-0000-4000-8000-000000000001', code: 'RUH', nameEn: 'Riyadh', nameAr: 'الرياض' }],
   };
 }
 
@@ -109,11 +115,22 @@ export function fakeServices(opts: { role?: SystemRole; products?: Product[] } =
       allowNegativeStock: true,
     })),
   };
+  const sales: SalesRepository = {
+    finalizeSale: vi.fn(async () => ({
+      status: 'created' as const, saleId: 'sale-1', invoiceNumber: 'INV-RUH-2026-000001', saleStatus: 'finalized' as const,
+      netTotal: '0.00', discountTotal: '0.00', vatTotal: '0.00', grossTotal: '0.00', paidTotal: '0.00', changeGiven: '0.00', balanceDue: '0.00',
+    })),
+    cancelSale: vi.fn(async () => {
+      throw new Error('not used');
+    }),
+    listRecentSales: vi.fn(async () => []),
+    listCustomers: vi.fn(async () => CUSTOMERS),
+  };
   const productImages: ProductImageStore = {
     upload: vi.fn(async () => 'org/product/x.jpg'),
     signedUrl: vi.fn(async () => 'https://example.test/x.jpg'),
   };
-  const services: Services = { catalog, org, auth, inventory, syncTransport, productImages };
+  const services: Services = { catalog, org, auth, inventory, sales, syncTransport, productImages };
   return services;
 }
 

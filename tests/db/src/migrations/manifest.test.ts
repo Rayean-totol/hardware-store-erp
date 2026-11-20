@@ -35,7 +35,7 @@ describe('migration set', () => {
   });
 
   it('the newest migration is the last one in apply order', () => {
-    expect(FILES.at(-1)).toBe('20261123000100_dashboard_summary.sql');
+    expect(FILES.at(-1)).toBe('20261124000100_pos_sales.sql');
   });
 
   it('already-merged migrations are unchanged', () => {
@@ -45,7 +45,9 @@ describe('migration set', () => {
   });
 
   it('every merged migration is accounted for in the checksum list', () => {
-    const unrecorded = FILES.filter((f) => f !== '20261123000100_dashboard_summary.sql' && !(f in APPLIED_CHECKSUMS));
+    // Newest migrations not yet merged: they get a checksum entry when merged.
+    const PENDING = ['20261123000100_dashboard_summary.sql', '20261124000100_pos_sales.sql'];
+    const unrecorded = FILES.filter((f) => !PENDING.includes(f) && !(f in APPLIED_CHECKSUMS));
     expect(unrecorded).toEqual([]);
   });
 });
