@@ -58,7 +58,9 @@ describe('POS over PostgREST', () => {
 
     const voided = await sales.cancelSale(DEMO_ORG, first.saleId, 'Test cancellation', 'POS-API');
     expect(voided.saleStatus).toBe('voided');
-    await expectCode(sales.cancelSale(DEMO_ORG, first.saleId, 'again', 'POS-API'), 'sale.not_finalized');
+    // A repeated cancel is idempotent: the voided sale is returned and nothing is reversed twice.
+    const again = await sales.cancelSale(DEMO_ORG, first.saleId, 'again', 'POS-API');
+    expect(again).toMatchObject({ status: 'duplicate', saleStatus: 'voided' });
   });
 
   it('a cashier can sell at the shelf but cannot discount', async () => {

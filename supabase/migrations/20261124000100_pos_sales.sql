@@ -176,8 +176,9 @@ create table if not exists public.sale_lines (
   gross_amount        numeric(18, 2) not null check (gross_amount >= 0),
   -- Average cost per entered unit at the time of sale. Used to reverse stock on cancellation.
   unit_cost           numeric(18, 4) not null default 0 check (unit_cost >= 0),
-  movement_client_id  uuid not null unique,
+  movement_client_id  uuid not null,
   unique (sale_id, line_no),
+  unique (org_id, movement_client_id),
   check (net_amount + vat_amount = gross_amount),
   foreign key (sale_id, org_id) references public.sales (id, org_id) on delete restrict,
   foreign key (product_id, org_id) references public.products (id, org_id)
@@ -350,9 +351,15 @@ begin
     perform app.fail('forbidden', 'branch');
   end if;
 
-  -- Replay of a request that already succeeded: return the stored sale, write nothing.
+  -- Two submits of the same checkout run one after the other: the second waits here, then sees the first sale.
+  perform pg_advisory_xact_lock(hashtextextended(p_org_id::text || ':sale:' || p_client_id::text, 0));
+
+  -- Replay of a request that already succeeded: return the stored sale (only to someone who may see its branch).
   select * into v_existing from public.sales where org_id = p_org_id and client_id = p_client_id;
   if found then
+    if not app.can_access_branch(v_existing.branch_id) then
+      perform app.fail('forbidden', 'branch');
+    end if;
     return app.sale_summary(v_existing.id, 'duplicate');
   end if;
 
@@ -652,6 +659,10 @@ begin
   if not app.can_access_branch(v_sale.branch_id) then
     perform app.fail('forbidden', 'branch');
   end if;
+  if v_sale.status = 'voided' then
+    -- Already cancelled (double submit or retry): return the stored state, reverse nothing.
+    return app.sale_summary(p_sale_id, 'duplicate');
+  end if;
   if v_sale.status <> 'finalized' then
     perform app.fail('sale.not_finalized');
   end if;
@@ -698,8 +709,7 @@ revoke all on function public.finalize_sale(uuid, uuid, uuid, uuid, text, uuid, 
 grant execute on function public.finalize_sale(uuid, uuid, uuid, uuid, text, uuid, text, jsonb, jsonb) to authenticated;
 revoke all on function public.cancel_sale(uuid, uuid, text, text) from public, anon;
 grant execute on function public.cancel_sale(uuid, uuid, text, text) to authenticated;
-revoke all on function app.sale_summary(uuid, text) from public, anon;
-grant execute on function app.sale_summary(uuid, text) to authenticated;
+revoke all on function app.sale_summary(uuid, text) from public, anon, authenticated;
 revoke all on function app.sale_documents_immutable() from public, anon;
 
 notify pgrst, 'reload schema';
