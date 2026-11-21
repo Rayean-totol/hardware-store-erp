@@ -24,6 +24,8 @@ const APPLIED_CHECKSUMS: Record<string, string> = {
   '20261121000300_stock_rpc.sql': '67bd8a05030d1b5e9714d5597023614f75066099d617fae7235139528e577594',
   '20261121000400_prices_media_search.sql': 'f57c53904a7bfde99a9de631ad8d67a8a394d8182e350331f3c4ec97ed0d6a54',
   '20261122000100_security_hardening.sql': 'd5a3c0e001e83f5d5c1c0f817182c202a0d7d56650aebe4c5e25ba9ce4ba2f59',
+  '20261123000100_dashboard_summary.sql': '9c5f2e6a7bcad5d66941f0568b2ba60309b8a1a02a29a65eed6e43660d4b2f55',
+  '20261124000100_pos_sales.sql': 'dd650d7115dee5a577fe4d5f80a2620cb2cf0256eae3e5843f7e930607b0ece8',
 };
 
 const sha = (f: string) => createHash('sha256').update(readFileSync(resolve(DIR, f))).digest('hex');
@@ -34,18 +36,17 @@ describe('migration set', () => {
     expect(new Set(FILES).size).toBe(FILES.length);
   });
 
-  it('the newest migration is the last one in apply order', () => {
-    expect(FILES.at(-1)).toBe('20261123000100_dashboard_summary.sql');
-  });
-
   it('already-merged migrations are unchanged', () => {
     for (const [file, expected] of Object.entries(APPLIED_CHECKSUMS)) {
       expect(sha(file), file).toBe(expected);
     }
   });
 
-  it('every merged migration is accounted for in the checksum list', () => {
-    const unrecorded = FILES.filter((f) => f !== '20261123000100_dashboard_summary.sql' && !(f in APPLIED_CHECKSUMS));
+  it('every migration up to the newest pinned one is pinned (newer ones are not merged yet)', () => {
+    // Migrations after the newest pin are pending: they are pinned once merged. Derived from the
+    // pins, so adding a migration never edits this file.
+    const newestPinned = Object.keys(APPLIED_CHECKSUMS).sort().at(-1)!;
+    const unrecorded = FILES.filter((f) => f <= newestPinned && !(f in APPLIED_CHECKSUMS));
     expect(unrecorded).toEqual([]);
   });
 });

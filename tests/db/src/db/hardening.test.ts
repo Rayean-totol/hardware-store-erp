@@ -28,6 +28,12 @@ const MATRIX: Record<string, string[]> = {
   membership_branches: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   product_units: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   product_prices: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  // Phase 3 (POS). Sales documents are written only by finalize_sale / cancel_sale.
+  customers: ['SELECT', 'INSERT', 'UPDATE'],
+  sales: ['SELECT'],
+  sale_lines: ['SELECT'],
+  sale_payments: ['SELECT'],
+  invoice_counters: [],
 };
 const PRIVILEGES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'] as const;
 
@@ -46,6 +52,8 @@ const PUBLIC_RPCS = [
   'list_low_stock(uuid,uuid)',
   'list_stock_movements(uuid,uuid,text,integer,integer)',
   'dashboard_inventory_summary(uuid,uuid)',
+  'finalize_sale(uuid,uuid,uuid,uuid,text,uuid,text,jsonb,jsonb)',
+  'cancel_sale(uuid,uuid,text,text)',
 ];
 
 describe('table privileges match the least-privilege matrix', () => {

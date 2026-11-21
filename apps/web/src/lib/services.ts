@@ -3,12 +3,14 @@ import {
   createSupabaseCatalogRepository,
   createSupabaseInventoryRepository,
   createSupabaseOrgRepository,
+  createSupabaseSalesRepository,
   createSupabaseSyncTransport,
   DataError,
   toDataError,
   type CatalogRepository,
   type InventoryRepository,
   type OrgRepository,
+  type SalesRepository,
   type SyncTransport,
 } from '@erp/data';
 
@@ -32,6 +34,7 @@ export interface Services {
   catalog: CatalogRepository;
   org: OrgRepository;
   inventory: InventoryRepository;
+  sales: SalesRepository;
   /** Backend access for the offline sync engine (same RLS-protected RPCs as the online screens). */
   syncTransport: SyncTransport;
   productImages: ProductImageStore;
@@ -95,6 +98,7 @@ export function createSupabaseServices(config: { url: string; anonKey: string },
     catalog,
     org: createSupabaseOrgRepository(client),
     inventory,
+    sales: createSupabaseSalesRepository(client),
     syncTransport: createSupabaseSyncTransport(client, inventory, catalog),
     productImages,
   };
