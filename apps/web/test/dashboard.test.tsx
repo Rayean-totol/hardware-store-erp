@@ -44,6 +44,18 @@ describe('dashboard', () => {
 });
 
 describe('navigation shell', () => {
+  it('a cashier sees the POS / Sales link (cashiers hold sales.read and sales.create)', async () => {
+    renderWithProviders(<AppShell><div>content</div></AppShell>, { services: fakeServices({ role: 'cashier' }) });
+    const pos = (await screen.findByText('POS / Sales')).closest('a');
+    expect(pos).toHaveAttribute('href', '/pos/');
+  });
+
+  it('a role without sales.read does not see the POS link (accountant has it; storekeeper does not)', async () => {
+    renderWithProviders(<AppShell><div>content</div></AppShell>, { services: fakeServices({ role: 'storekeeper' }) });
+    await screen.findByText('Products');
+    expect(screen.queryByText('POS / Sales')).not.toBeInTheDocument();
+  });
+
   it('links live modules and shows unbuilt modules as disabled, not clickable', async () => {
     renderWithProviders(<AppShell><div>content</div></AppShell>, { services: fakeServices() });
     const dashboardLink = (await screen.findByText('Dashboard')).closest('a');

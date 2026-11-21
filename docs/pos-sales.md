@@ -60,3 +60,13 @@ Product search by SKU, name or barcode; scanners that type and press Enter add o
 * `tests/db/src/db/pos-concurrency.test.ts` (own database, committed transactions): simultaneous checkouts for the last units, double submit, many concurrent invoices.
 * `tests/db/src/api/pos-rpc.test.ts` (own database, real PostgREST with signed JWTs).
 * `apps/web/test/pos.test.tsx`: add, totals, cash change, credit gating, role controls, hold/resume, scanner, offline.
+
+## After deployment: the POS / Sales menu is missing
+
+The menu item is shown only when the signed-in user has `sales.read`. The app gets that list from `get_my_context()`, which reads the live database. So the menu stays hidden until the Phase 3 migration has been run on the Supabase project. Merging the pull request and deploying the site do not change the database.
+
+1. Run `supabase/checks/phase3_pos_verify.sql` in the Supabase SQL editor. It only reads. Every row should be `true`.
+2. If any row is `false`, back up the project first, then run `supabase/migrations/20261124000100_pos_sales.sql` once in the SQL editor. It is safe to run again: it creates only what is missing and adds role grants without removing any.
+3. Run the check again, then sign out and sign in again so the permission list reloads.
+
+The check file is kept outside `supabase/migrations/` on purpose, so it is never applied automatically.

@@ -135,11 +135,10 @@ describe('POS concurrency (committed)', () => {
     const client = randomUUID();
 
     const results = await Promise.all([checkout(s, '2', client), checkout(s, '2', client)]);
-    const created = results.filter((r) => r.ok);
-    expect(created.length).toBeGreaterThanOrEqual(1);
-    // The other attempt is either the stored replay (duplicate) or a unique-key conflict; never a second sale.
-    const other = results.find((r) => !r.ok);
-    if (other) expect(other.code).toBe('23505');
+    // Both submits succeed: one creates the sale, the other is the stored replay. Neither fails with a key conflict.
+    expect(results.every((r) => r.ok)).toBe(true);
+    const statuses = results.map((r) => (r as { sale: { status: string } }).sale.status).sort();
+    expect(statuses).toEqual(['created', 'duplicate']);
 
     const { rows } = await pool.query('select count(*)::int as n from public.sales where client_id = $1', [client]);
     expect(rows[0].n).toBe(1);
