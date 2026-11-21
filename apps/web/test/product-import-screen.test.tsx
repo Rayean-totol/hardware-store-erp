@@ -56,4 +56,18 @@ describe('product import screen safety', () => {
     await user.click(screen.getByRole('checkbox'));
     await waitFor(() => expect(run).toBeEnabled());
   });
+  it('previews an Excel (.xlsx) file the same way as CSV', async () => {
+    const ExcelJS = (await import('exceljs')).default;
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Products');
+    ws.addRow(HEADER.split(','));
+    ws.addRow(['DEMO-XLS-1', 'Excel demo (DEMO)', 'تجريبي اكسل', '', '', '', '', 'stock', PCS, 'S', '', '', PCS, 1, '', 9, 'yes', 'yes']);
+    const buffer = await wb.xlsx.writeBuffer();
+    const file = new File([new Uint8Array(buffer as ArrayBuffer)], 'products.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    renderWithProviders(<ProductImport />, { services: fakeServices() });
+    await upload(file);
+    expect(await screen.findByRole('button', { name: /Import 1 product/ })).toBeEnabled();
+  });
 });
