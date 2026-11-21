@@ -66,6 +66,7 @@ describe('navigation shell', () => {
     const purchase = screen.getByText('Purchase');
     expect(purchase.closest('a')).toBeNull();
     expect(purchase.closest('[aria-disabled="true"]')).not.toBeNull();
-    expect(screen.getAllByText('Soon').length).toBeGreaterThanOrEqual(10);
+    // Suppliers is live now; the remaining planned modules are still shown as Soon.
+    expect(screen.getAllByText('Soon').length).toBeGreaterThanOrEqual(9);
   });
 });

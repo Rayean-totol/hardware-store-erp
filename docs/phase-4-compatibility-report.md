@@ -104,3 +104,51 @@ No ZATCA compliance is claimed. VAT data for purchases will be recorded in 4C wi
 | File | Creates or modifies | Reversible? |
 | --- | --- | --- |
 | `20261125000100_suppliers.sql` | Creates `supplier_counters`, `suppliers`, the three functions, two permission rows and role grants. Adds nothing to existing tables. | Additive. Rollback would drop only the new objects, and only if no supplier data exists. Not planned; do not drop after use. |
+
+## 9. Phase 4A implementation status (for review)
+
+Built on this branch. Nothing has been run against the production database.
+
+| Area | Delivered | Where |
+| --- | --- | --- |
+| Database | `suppliers`, `supplier_counters`, `list_suppliers`, `get_supplier`, `save_supplier`, validation helper, permissions, role grants, audit trigger | `supabase/migrations/20261125000100_suppliers.sql` |
+| Install check | Read-only verification, 15 rows | `supabase/checks/phase4a_suppliers_verify.sql` |
+| Domain rules | Validation and normalisation, mirrored from SQL | `packages/domain/src/supplier.ts` |
+| Data access | Repository over the three functions | `packages/data/src/supplier-repository.ts` |
+| Screens | Directory (search, status filter, CSV export), form (create and edit, validation, version check), profile (details, financial terms for managers, history placeholders) | `apps/web/src/features/suppliers/`, routes under `/suppliers/` |
+| Navigation | Suppliers link for users with `suppliers.read` | `apps/web/src/components/app-shell.tsx` |
+| Translations | 80 keys in English, Arabic and Bangla, including all supplier error codes | `packages/i18n/src/messages/` |
+
+### Tests executed (this branch)
+
+- Database, main suite: 194 pass. Includes 31 new supplier tests: numbering, validation (12 cases, each checked for no write), uniqueness (code and VAT, scoped by organisation), organisation isolation, role access (cashier, storekeeper, accountant, auditor, manager, owner), financial-field hiding, optimistic locking, direct-access denial, audit trail.
+- Database, concurrency (committed, own database): 6 pass. Includes 3 supplier cases: distinct numbers under simultaneous creates, one winner for a duplicate code, one winner for two edits from the same version.
+- API over PostgREST (own database): 14 existing pass; 7 POS and supplier tests pass.
+- Unit: i18n 15, domain 104 (25 new supplier rules), data 73 (7 new), web 78 (17 new, including role visibility and CSV content).
+- Lint, typecheck and production build pass; `/suppliers`, `/suppliers/new`, `/suppliers/edit` and `/suppliers/profile` are generated.
+
+### Install check (fresh database built from migrations 1–10 and POS)
+
+- Before 4A: 14 checks FALSE, 1 TRUE (“cashier holds no supplier permission”, correctly true while nothing exists).
+- Applied 4A twice: no errors.
+- Existing rows (organisations, products, product units, warehouses, memberships, audit log, sales) unchanged.
+- After 4A: 15 checks TRUE.
+
+### Decisions I took, awaiting your approval
+
+1. VAT registration number unique per organisation (partial unique index).
+2. Arabic supplier name required; Bangla optional.
+3. Blank supplier code uses the supplier ID.
+4. Opening balance editable in 4A. It must be locked once purchase or payment entries exist (4C/4D).
+5. Financial fields and bank details visible only to `suppliers.manage` in 4A.
+6. Saudi IBAN only.
+7. PDF export of the directory deferred; CSV export delivered.
+8. Purchase and payment history on the profile are placeholders until 4C and 4D.
+9. Supplier attachments deferred to 4C.
+10. An edit must carry the supplier's id and version. A version without an id is refused.
+
+### Known limits in 4A
+
+- Deactivating a supplier is the only way to retire one; there is no delete, by design.
+- Clearing the code on an edit resets it to the supplier ID.
+- Concurrency and uniqueness are tested against the local PostgreSQL build, not against Supabase.
