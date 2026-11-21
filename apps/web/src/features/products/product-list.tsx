@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@erp/ui';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Download, ImagePlus, LayoutGrid, List, Pencil, Plus, Printer, Search, Upload } from 'lucide-react';
+import { Archive, ArchiveRestore, Camera, Download, ImagePlus, LayoutGrid, List, Pencil, Plus, Printer, Search, Upload } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
@@ -158,6 +158,7 @@ export function ProductList() {
         actions={
           <>
             <Button variant="outline" asChild><Link href="/labels/"><Printer aria-hidden="true" />{t('labels.title')}</Link></Button>
+            <Button variant="outline" asChild><Link href="/products/find/"><Camera aria-hidden="true" />{t('products.find_by_photo')}</Link></Button>
             <Button variant="outline" onClick={() => void exportCsv()} disabled={exporting}>
               <Download aria-hidden="true" />{exporting ? t('common.saving') : t('products.export')}
             </Button>
