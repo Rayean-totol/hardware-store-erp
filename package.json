@@ -28,5 +28,10 @@
     "typescript-eslint": "^8.73.0",
     "vitest": "^4.1.12"
   },
-  "type": "module"
+  "type": "module",
+  "pnpm": {
+    "overrides": {
+      "uuid": ">=14.0.3"
+    }
+  }
 }

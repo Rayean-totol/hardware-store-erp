@@ -22,6 +22,8 @@ export interface ProductUnitDef {
   isBase: boolean;
   barcode?: string | null;
   salePrice?: string | null;
+  /** Purchase (cost) price per unit. undefined = unchanged; null or '' = clear. */
+  purchasePrice?: string | null;
   isSaleUnit: boolean;
   isPurchaseUnit: boolean;
 }

@@ -183,12 +183,16 @@ export function planProductImport(text: string, orgId: string, lookups: ProductC
       taxCategory: taxCategory ?? 'S',
       taxExemptionReasonCode: cell(first, 'tax_exemption_reason') || null,
       reorderLevel: cell(first, 'reorder_level') || null,
+      // Optional columns: read only when the file has them, and a blank cell leaves the stored value alone.
+      sizeLabel: header.has('size') && cell(first, 'size') ? cell(first, 'size') : undefined,
+      variantGroup: header.has('variant_group') && cell(first, 'variant_group') ? cell(first, 'variant_group') : undefined,
       units: unitRows.map(({ e, unit }) => ({
         unitId: unit!.id,
         factor: cell(e.row, 'factor'),
         isBase: unit!.id === baseUnit?.id,
         barcode: cell(e.row, 'barcode') || null,
         salePrice: cell(e.row, 'sale_price') || null,
+        purchasePrice: header.has('purchase_price') && cell(e.row, 'purchase_price') ? cell(e.row, 'purchase_price') : undefined,
         isSaleUnit: truthy(cell(e.row, 'is_sale'), true),
         isPurchaseUnit: truthy(cell(e.row, 'is_purchase'), true),
       })),

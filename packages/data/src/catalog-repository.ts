@@ -49,6 +49,8 @@ export interface CatalogRepository {
   saveBrand(input: BrandInput): Promise<Brand>;
   searchProducts(query: ProductQuery): Promise<Page<Product>>;
   getProduct(id: string): Promise<Product | null>;
+  /** Purchase prices of a product's units. Empty unless the user holds catalog.price_write (row policy). */
+  listUnitCosts(productId: string): Promise<Array<{ unitId: string; purchasePrice: string }>>;
   /** expectedVersion: null to create; the current rowVersion to update. */
   saveProduct(draft: ProductDraft, expectedVersion: number | null): Promise<SaveResult>;
   setProductArchived(id: string, archived: boolean): Promise<void>;
@@ -74,6 +76,9 @@ export function toSaveProductParams(draft: ProductDraft, expectedVersion: number
       tax_category: draft.taxCategory,
       tax_exemption_reason_code: draft.taxExemptionReasonCode ?? null,
       reorder_level: draft.reorderLevel ?? null,
+      // Sent only when the caller set it: an absent field leaves the stored size unchanged.
+      ...(draft.sizeLabel !== undefined ? { size_label: draft.sizeLabel ?? null } : {}),
+      ...(draft.variantGroup !== undefined ? { variant_group: draft.variantGroup ?? null } : {}),
     },
     p_units: draft.units.map((u) => ({
       unit_id: u.unitId,
@@ -81,6 +86,8 @@ export function toSaveProductParams(draft: ProductDraft, expectedVersion: number
       is_base: u.isBase,
       barcode: u.barcode ?? null,
       sale_price: u.salePrice ?? null,
+      // Sent only when set: an absent cost is left alone. null or '' clears it.
+      ...(u.purchasePrice !== undefined ? { purchase_price: u.purchasePrice ?? null } : {}),
       is_sale_unit: u.isSaleUnit,
       is_purchase_unit: u.isPurchaseUnit,
     })),
@@ -159,6 +166,13 @@ export function createSupabaseCatalogRepository(db: DbClient): CatalogRepository
       if (result.error) throw toDataError(result.error);
       const rows = (result.data ?? []) as unknown as ProductRow[];
       return { items: rows.map(mapProduct), total: result.count ?? rows.length };
+    },
+
+    async listUnitCosts(productId) {
+      const rows = unwrap(
+        await db.from('product_unit_costs').select('unit_id, purchase_price::text').eq('product_id', productId),
+      ) as unknown as Array<{ unit_id: string; purchase_price: string }>;
+      return rows.map((r) => ({ unitId: r.unit_id, purchasePrice: r.purchase_price }));
     },
 
     async getProduct(id) {

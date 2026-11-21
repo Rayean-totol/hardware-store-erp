@@ -2,6 +2,7 @@
 
 import { applyImportPlan, DataError, planImportFile, type ImportOutcome } from '@erp/data';
 import { importBlockReason } from './import-gate';
+import { MAX_IMPORT_BYTES, workbookToCsv } from './excel-to-csv';
 import type { ImportPlan } from '@erp/domain';
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@erp/ui';
 import { Upload } from 'lucide-react';
@@ -43,13 +44,16 @@ export function ProductImport() {
     setConfirmOverwrite(false);
     if (!file) return;
     setFileName(file.name);
-    if (file.size > MAX_BYTES) {
+    const isExcel = /\.xlsx$/i.test(file.name);
+    if (file.size > (isExcel ? MAX_IMPORT_BYTES : MAX_BYTES)) {
       setError(new Error(t('import.too_large')));
       return;
     }
     setBusy('plan');
     try {
-      setPlan(await planImportFile(catalog, orgId, await file.text()));
+      // Excel is converted to the same CSV format, then planned by the same rules as a CSV file.
+      const text = isExcel ? await workbookToCsv(await file.arrayBuffer()) : await file.text();
+      setPlan(await planImportFile(catalog, orgId, text));
     } catch (err) {
       setError(err);
     } finally {
@@ -102,7 +106,7 @@ export function ProductImport() {
             <span className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent">
               <Upload className="size-4" aria-hidden="true" />
               {t('import.choose_file')}
-              <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => void onFile(e.target.files?.[0])} />
+              <input type="file" accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" className="sr-only" onChange={(e) => void onFile(e.target.files?.[0])} />
             </span>
             {fileName ? <span className="text-sm text-muted-foreground" dir="ltr">{fileName}</span> : null}
           </label>

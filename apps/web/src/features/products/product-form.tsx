@@ -44,13 +44,15 @@ export interface ProductFormProps {
   brands: Brand[];
   pricesIncludeVat: boolean;
   canEditPrices: boolean;
+  /** Stored purchase prices by unit id. Pass undefined when the user may not see costs. */
+  unitCosts?: Record<string, string> | undefined;
   /** Persists the validated draft. Throws DataError on failure. */
   onSave(draft: ProductDraft, expectedVersion: number | null): Promise<void>;
   onCancel(): void;
   onReload?(): void;
 }
 
-function emptyDraft(orgId: string, units: Unit[]): ProductDraft {
+function emptyDraft(orgId: string, units: Unit[], canEditPrices: boolean): ProductDraft {
   const pcs = units.find((u) => u.code === 'pcs') ?? units[0];
   return {
     orgId,
@@ -66,13 +68,16 @@ function emptyDraft(orgId: string, units: Unit[]): ProductDraft {
     taxCategory: 'S',
     taxExemptionReasonCode: '',
     reorderLevel: '',
+    sizeLabel: '',
+    variantGroup: '',
     units: pcs
-      ? [{ unitId: pcs.id, factor: '1', isBase: true, barcode: '', salePrice: '', isSaleUnit: true, isPurchaseUnit: true }]
+      ? [{ unitId: pcs.id, factor: '1', isBase: true, barcode: '', salePrice: '', ...(canEditPrices ? { purchasePrice: '' } : {}), isSaleUnit: true, isPurchaseUnit: true }]
       : [],
   };
 }
 
-function draftFromProduct(p: Product): ProductDraft {
+/** unitCosts: the stored purchase prices, loaded before the form opens. undefined = not visible to this user. */
+function draftFromProduct(p: Product, unitCosts: Record<string, string> | undefined): ProductDraft {
   return {
     id: p.id,
     orgId: p.orgId,
@@ -88,6 +93,8 @@ function draftFromProduct(p: Product): ProductDraft {
     taxCategory: p.taxCategory,
     taxExemptionReasonCode: p.taxExemptionReasonCode ?? '',
     reorderLevel: p.reorderLevel ? String(Number(p.reorderLevel)) : '',
+    sizeLabel: p.sizeLabel ?? '',
+    variantGroup: p.variantGroup ?? '',
     units: p.units.map((u) => ({
       unitId: u.unitId,
       // DB returns numeric(18,6) as "200.000000"; show "200"
@@ -95,6 +102,7 @@ function draftFromProduct(p: Product): ProductDraft {
       isBase: u.isBase,
       barcode: u.barcode ?? '',
       salePrice: u.salePrice ? (tryDec(u.salePrice)?.toString() ?? u.salePrice) : '',
+      ...(unitCosts !== undefined ? { purchasePrice: unitCosts[u.unitId] ?? '' } : {}),
       isSaleUnit: u.isSaleUnit,
       isPurchaseUnit: u.isPurchaseUnit,
     })),
@@ -114,7 +122,9 @@ export function ProductForm(props: ProductFormProps) {
   const { writable } = useConnection();
   const { orgId, product, units, categories, brands, pricesIncludeVat, canEditPrices } = props;
   const { t, tMaybe, fmt, name } = useI18n();
-  const [draft, setDraft] = React.useState<ProductDraft>(() => (product ? draftFromProduct(product) : emptyDraft(orgId, units)));
+  const { unitCosts } = props;
+  const [draft, setDraft] = React.useState<ProductDraft>(() =>
+    product ? draftFromProduct(product, unitCosts) : emptyDraft(orgId, units, props.canEditPrices));
   const [issues, setIssues] = React.useState<ValidationIssue[]>([]);
   const [submitted, setSubmitted] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -157,6 +167,7 @@ export function ProductForm(props: ProductFormProps) {
         isBase: true,
         barcode: oldBase?.barcode ?? '',
         salePrice: oldBase?.salePrice ?? '',
+        ...(oldBase?.purchasePrice !== undefined ? { purchasePrice: oldBase.purchasePrice } : {}),
         isSaleUnit: oldBase?.isSaleUnit ?? true,
         isPurchaseUnit: oldBase?.isPurchaseUnit ?? true,
       };
@@ -179,7 +190,7 @@ export function ProductForm(props: ProductFormProps) {
       ...d,
       units: [
         ...d.units,
-        { unitId: next.id, factor: suggestion ?? '', isBase: false, barcode: '', salePrice: '', isSaleUnit: true, isPurchaseUnit: true },
+        { unitId: next.id, factor: suggestion ?? '', isBase: false, barcode: '', salePrice: '', ...(props.canEditPrices ? { purchasePrice: '' } : {}), isSaleUnit: true, isPurchaseUnit: true },
       ],
     }));
   }
@@ -295,6 +306,12 @@ export function ProductForm(props: ProductFormProps) {
           <Field label={t('product.reorder_level')} optionalLabel={t('common.optional')} error={errorFor('reorderLevel')}>
             {(p) => <Input {...p} dir="ltr" inputMode="decimal" value={draft.reorderLevel ?? ''} onChange={(e) => update({ reorderLevel: e.target.value })} />}
           </Field>
+          <Field label={t('product.size')} optionalLabel={t('common.optional')} error={errorFor('sizeLabel')} hint={t('product.size_hint')}>
+            {(p) => <Input {...p} maxLength={40} value={draft.sizeLabel ?? ''} onChange={(e) => update({ sizeLabel: e.target.value })} />}
+          </Field>
+          <Field label={t('product.variant_group')} optionalLabel={t('common.optional')} error={errorFor('variantGroup')} hint={t('product.variant_group_hint')}>
+            {(p) => <Input {...p} maxLength={40} dir="ltr" value={draft.variantGroup ?? ''} onChange={(e) => update({ variantGroup: e.target.value })} />}
+          </Field>
           <Field label={t('product.description')} optionalLabel={t('common.optional')} className="md:col-span-2" error={errorFor('description')}>
             {(p) => <Textarea {...p} value={draft.description ?? ''} maxLength={2000} onChange={(e) => update({ description: e.target.value })} />}
           </Field>
@@ -393,6 +410,16 @@ export function ProductForm(props: ProductFormProps) {
                           onChange={(e) => updateUnit(index, { salePrice: e.target.value })} />
                       )}
                     </Field>
+                    {canEditPrices ? (
+                      <Field label={t('product.purchase_price')} optionalLabel={t('common.optional')}
+                        error={errorFor(`units.${index}.purchasePrice`)} warning={warningFor(`units.${index}.purchasePrice`)}
+                        hint={t('product.purchase_price_hint')}>
+                        {(p) => (
+                          <Input {...p} dir="ltr" inputMode="decimal" value={row.purchasePrice ?? ''}
+                            onChange={(e) => updateUnit(index, { purchasePrice: e.target.value })} />
+                        )}
+                      </Field>
+                    ) : null}
                     <div className="flex items-end gap-3 pb-2">
                       <label className="flex items-center gap-1.5 text-sm">
                         <Checkbox checked={row.isSaleUnit} onChange={(e) => updateUnit(index, { isSaleUnit: e.target.checked })} />

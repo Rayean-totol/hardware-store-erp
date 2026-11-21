@@ -28,6 +28,8 @@ const MATRIX: Record<string, string[]> = {
   membership_branches: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   product_units: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   product_prices: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  // Purchase prices: the row policies (catalog.price_write) decide who sees and changes them.
+  product_unit_costs: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   // Phase 3 (POS). Sales documents are written only by finalize_sale / cancel_sale.
   customers: ['SELECT', 'INSERT', 'UPDATE'],
   sales: ['SELECT'],
