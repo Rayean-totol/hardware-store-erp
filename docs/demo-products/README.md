@@ -42,9 +42,11 @@ Not yet verified: the import on your live project, and the image uploads (they n
 
 ## Steps (do them in this order, each after your approval)
 
-**Step 1 — check the current state (read-only).** In Supabase → SQL Editor, paste
-`supabase/checks/demo_products_verify.sql` from GitHub and run it. Expected now: `DEMO products found`
-= `0`. Send me the table.
+**Step 1 — check the prerequisites and current state (read-only).** In Supabase → SQL Editor, paste
+`supabase/checks/demo_products_prereq.sql` from GitHub and run it. Expected: every category and unit line
+shows `1 (matching rows)` or more, `DEMO SKUs already present` = `0`, and `products already using a demo English name` = `0`.
+If any category or unit shows `0`, do not import: send me the table. Then run
+`supabase/checks/demo_products_verify.sql` and expect `DEMO products found` = `0`. Send me both tables.
 
 **Step 2 — backup.** Supabase → Database → Backups. Confirm a recent backup exists.
 
