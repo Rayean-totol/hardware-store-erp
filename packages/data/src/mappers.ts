@@ -61,6 +61,7 @@ export const mapProduct = (r: ProductRow): Product => ({
   taxCategory: r.tax_category,
   taxExemptionReasonCode: r.tax_exemption_reason_code,
   reorderLevel: r.reorder_level,
+  sizeLabel: r.size_label ?? null,
   archivedAt: r.archived_at,
   imagePath: r.image_path,
   updatedAt: r.updated_at,

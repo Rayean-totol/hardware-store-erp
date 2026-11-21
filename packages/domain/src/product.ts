@@ -26,6 +26,8 @@ export interface ProductDraft {
   taxCategory: TaxCategory;
   taxExemptionReasonCode?: string | null | undefined;
   reorderLevel?: string | null | undefined;
+  /** Free text such as "1/2 inch" or "50 kg". undefined = unchanged; null or '' = clear. */
+  sizeLabel?: string | null | undefined;
   units: ProductUnitDef[];
 }
 
@@ -56,6 +58,7 @@ const draftSchema = z.object({
   taxCategory: z.enum(TAX_CATEGORIES),
   taxExemptionReasonCode: z.string().nullish(),
   reorderLevel: z.string().nullish(),
+  sizeLabel: z.string().nullish(),
   units: z.array(
     z.object({
       unitId: uuid,
@@ -63,6 +66,7 @@ const draftSchema = z.object({
       isBase: z.boolean(),
       barcode: z.string().nullish(),
       salePrice: z.string().nullish(),
+      purchasePrice: z.string().nullish(),
       isSaleUnit: z.boolean(),
       isPurchaseUnit: z.boolean(),
     }),
@@ -99,11 +103,14 @@ export function normalizeProductDraft(draft: ProductDraft): ProductDraft {
     brandId: blank(draft.brandId),
     taxExemptionReasonCode: draft.taxCategory === 'S' ? null : blank(draft.taxExemptionReasonCode),
     reorderLevel: blank(draft.reorderLevel),
+    // undefined stays undefined: an absent field means "leave the stored value alone".
+    sizeLabel: draft.sizeLabel === undefined ? undefined : blank(draft.sizeLabel),
     units: draft.units.map((u) => ({
       ...u,
       factor: u.factor.trim(),
       barcode: blank(u.barcode),
       salePrice: blank(u.salePrice),
+      purchasePrice: u.purchasePrice === undefined ? undefined : blank(u.purchasePrice),
     })),
   };
 }
@@ -121,6 +128,7 @@ export function validateProductDraft(input: ProductDraft, units: UnitCatalog): P
   const issues: ValidationIssue[] = [];
   const error = (path: string, code: string) => issues.push({ path, code, severity: 'error' });
   const warn = (path: string, code: string) => issues.push({ path, code, severity: 'warning' });
+  if (draft.sizeLabel && draft.sizeLabel.length > 40) error('sizeLabel', 'size_too_long');
 
   const parsed = draftSchema.safeParse(draft);
   if (!parsed.success) {
@@ -169,6 +177,14 @@ export function validateProductDraft(input: ProductDraft, units: UnitCatalog): P
       else if (price.decimalPlaces() > PRICE_DECIMALS) error(`units.${index}.salePrice`, 'price_precision');
     } else if (u.isSaleUnit && draft.productType === 'stock') {
       warn(`units.${index}.salePrice`, 'price_missing');
+    }
+    if (u.purchasePrice) {
+      const cost = tryDec(u.purchasePrice);
+      if (!cost || cost.isNegative()) error(`units.${index}.purchasePrice`, 'not_negative_number');
+      else if (cost.decimalPlaces() > PRICE_DECIMALS) error(`units.${index}.purchasePrice`, 'price_precision');
+      else if (u.salePrice && tryDec(u.salePrice) && cost.greaterThan(tryDec(u.salePrice)!)) {
+        warn(`units.${index}.purchasePrice`, 'purchase_above_sale');
+      }
     }
   });
 

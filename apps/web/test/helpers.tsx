@@ -80,6 +80,7 @@ export function fakeServices(opts: { role?: SystemRole; products?: Product[] } =
       return { items, total: items.length };
     }),
     getProduct: vi.fn(async (id) => products.find((p) => p.id === id) ?? null),
+    listUnitCosts: vi.fn(async () => []),
     saveProduct: vi.fn(async () => ({ id: 'new-id', rowVersion: 1 })),
     setProductArchived: vi.fn(async () => undefined),
     setProductImagePath: vi.fn(async () => undefined),
