@@ -387,7 +387,10 @@ describe('POS: cancellation and immutability', () => {
       );
       expect(reversal.rows).toEqual([{ movement_type: 'stock_in', reason_code: 'return' }]);
 
-      await refused(sql, () => sql('select public.cancel_sale($1, $2, $3, $4)', [DEMO_ORG, sale.sale_id, 'again', 'POS-TEST']), 'sale.not_finalized');
+      // A repeated cancel is idempotent: it returns the voided sale and reverses nothing again.
+      const again = await sql('select public.cancel_sale($1, $2, $3, $4) as r', [DEMO_ORG, sale.sale_id, 'again', 'POS-TEST']);
+      expect(again.rows[0].r).toMatchObject({ status: 'duplicate', sale_status: 'voided' });
+      expect(await stockOf(sql, R.ruh.id, R.screw)).toBe(beforeCancel + 4);
     });
   });
 

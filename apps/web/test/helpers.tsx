@@ -1,4 +1,4 @@
-import type { Brand, CatalogRepository, Category, Customer, InventoryRepository, MembershipContext, OrgRepository, Product, SalesRepository, SyncTransport, Unit, Warehouse } from '@erp/data';
+import type { Brand, CatalogRepository, Category, Customer, InventoryRepository, MembershipContext, OrgRepository, Product, SalesRepository, Supplier, SupplierRepository, SyncTransport, Unit, Warehouse } from '@erp/data';
 import { ROLE_PERMISSIONS, type SystemRole } from '@erp/domain';
 import type { Locale } from '@erp/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -44,6 +44,17 @@ export const WAREHOUSES: Warehouse[] = [
 export const CUSTOMERS: Customer[] = [
   { id: '90000000-0000-4000-8000-000000000001', name: 'Al Tamimi Build', phone: null, creditAllowed: true },
   { id: '90000000-0000-4000-8000-000000000002', name: 'Walk-in cash', phone: null, creditAllowed: false },
+];
+
+export const SUPPLIERS: Supplier[] = [
+  {
+    id: 'a0000000-1000-4000-8000-000000000001', supplierNo: 'SUP-000001', supplierCode: 'NAJD', nameEn: 'Najd Fasteners', nameAr: 'مثبتات نجد',
+    nameBn: null, contactPerson: 'Khalid', mobile: '+966501234567', whatsapp: null, email: null, address: null, city: 'Riyadh',
+    countryCode: 'SA', vatNumber: null, crNumber: null, paymentTermsDays: 30, defaultCurrency: 'SAR', notes: null, isActive: true,
+    createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-20T00:00:00Z', rowVersion: 3,
+    openingBalance: '1500.50', creditLimit: '20000.00', bankName: 'Al Rajhi', bankAccountName: 'Najd', iban: 'SA0380000000608010167519',
+    openingBalanceLocked: false, currentBalance: '1500.50',
+  },
 ];
 
 export const HAMMER: Product = {
@@ -126,11 +137,24 @@ export function fakeServices(opts: { role?: SystemRole; products?: Product[] } =
     listRecentSales: vi.fn(async () => []),
     listCustomers: vi.fn(async () => CUSTOMERS),
   };
+  // Mirrors the server: financial and bank fields are present only with suppliers.manage.
+  const canManageSuppliers = ROLE_PERMISSIONS[opts.role ?? 'owner'].includes('suppliers.manage');
+  const visible = (s: Supplier): Supplier => {
+    if (canManageSuppliers) return s;
+    const { openingBalance: _o, creditLimit: _c, bankName: _b, bankAccountName: _a, iban: _i, openingBalanceLocked: _l, currentBalance: _cb, ...rest } = s;
+    return rest;
+  };
+  const suppliers: SupplierRepository = {
+    list: vi.fn(async () => ({ items: SUPPLIERS.map(visible), total: SUPPLIERS.length, limit: 25, offset: 0 })),
+    get: vi.fn(async (_org, id) => visible(SUPPLIERS.find((s) => s.id === id) ?? SUPPLIERS[0]!)),
+    save: vi.fn(async () => ({ id: 'supplier-new', supplierNo: 'SUP-000002', rowVersion: 1 })),
+    adjustBalance: vi.fn(async () => ({ status: 'created' as const, entryId: 'entry-1', balance: '1450.50' })),
+  };
   const productImages: ProductImageStore = {
     upload: vi.fn(async () => 'org/product/x.jpg'),
     signedUrl: vi.fn(async () => 'https://example.test/x.jpg'),
   };
-  const services: Services = { catalog, org, auth, inventory, sales, syncTransport, productImages };
+  const services: Services = { catalog, org, auth, inventory, sales, suppliers, syncTransport, productImages };
   return services;
 }
 

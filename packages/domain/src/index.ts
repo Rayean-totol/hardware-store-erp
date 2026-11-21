@@ -12,3 +12,4 @@ export * from './pricing';
 export * from './csv';
 export * from './product-csv';
 export * from './sales';
+export * from './supplier';

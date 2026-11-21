@@ -71,11 +71,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     { key: 'catalog', href: '/catalog/', icon: Tags, show: session.can('catalog.read') },
     { key: 'labels', href: '/labels/', icon: Printer, show: session.can('catalog.read') },
     { key: 'pos', href: '/pos/', icon: ShoppingCart, show: session.can('sales.read') },
+    { key: 'suppliers', href: '/suppliers/', icon: UserRound, show: session.can('suppliers.read') },
     { key: 'team', href: '/team/', icon: Users, show: session.can('users.manage') },
   ];
   // Modules that are planned but not built yet: shown, never clickable.
   const planned: Array<{ key: string; icon: Icon }> = [
-    { key: 'purchase', icon: Truck }, { key: 'suppliers', icon: UserRound },
+    { key: 'purchase', icon: Truck }, 
     { key: 'customers', icon: Users }, { key: 'expenses', icon: Receipt }, { key: 'accounts', icon: Landmark },
     { key: 'reports', icon: FileText }, { key: 'staff', icon: Clock }, { key: 'vat', icon: Calculator },
     { key: 'backup', icon: Archive }, { key: 'settings', icon: Settings },
