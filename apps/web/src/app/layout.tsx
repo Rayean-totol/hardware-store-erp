@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     icon: [{ url: `${BASE_PATH}/icons/icon-192.png`, sizes: '192x192', type: 'image/png' }],
     apple: [{ url: `${BASE_PATH}/icons/apple-touch-icon.png`, sizes: '180x180', type: 'image/png' }],
   },
-  appleWebApp: { capable: true, title: 'AQ Hardware ERP', statusBarStyle: 'black-translucent' },
+  appleWebApp: { capable: true, title: 'Al Qureshi ERP', statusBarStyle: 'black-translucent' },
 };
 
 // viewport-fit=cover lets the layout use the notch and home-indicator areas via env(safe-area-inset-*).

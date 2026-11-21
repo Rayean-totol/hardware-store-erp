@@ -1,7 +1,7 @@
 import type { Messages } from './en';
 
 export const bn: Messages = {
-  'app.name': 'হার্ডওয়্যার ইআরপি',
+  'app.name': 'Al Qureshi Hardware ERP Pro',
   'app.tagline': 'হার্ডওয়্যার দোকানের জন্য ইনভেন্টরি, পিওএস ও হিসাবরক্ষণ',
 
   'common.save': 'সংরক্ষণ',
@@ -442,7 +442,7 @@ export const bn: Messages = {
   'errors.storage.url_failed': 'ছবি লোড করা যায়নি: {message}',
   'errors.missing_result': 'সার্ভার এই লেনদেন নিশ্চিত করেনি। এটি অপেক্ষমাণ থাকবে এবং আবার পাঠানো হবে।',
   'errors.auth.failed': 'সাইন ইন ব্যর্থ: {message}',
-  'app.product': 'হার্ডওয়্যার ইআরপি প্রো',
+  'app.product': 'Al Qureshi Hardware ERP Pro',
   'dashboard.title': 'ড্যাশবোর্ড',
   'dashboard.subtitle': 'আপনার ডেটাবেস থেকে সরাসরি তথ্য। যেসব মডিউল এখনও তৈরি হয়নি তার তথ্য চিহ্নিত।',
   'dashboard.branch': 'শাখা',

@@ -190,8 +190,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <Boxes className="size-5" aria-hidden={true} />
       </span>
       <span className={cn('leading-tight', collapsed && 'sr-only')}>
-        <span className="block text-sm">{t('app.name')}</span>
-        <span className="block text-xs font-normal text-amber-400">{t('app.product')}</span>
+        <span className="block text-sm leading-snug">{t('app.name')}</span>
       </span>
     </div>
   );

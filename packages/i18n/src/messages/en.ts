@@ -1,6 +1,6 @@
 /** Source catalog. ar.ts and bn.ts must provide every key (enforced by the type + tests). */
 export const en = {
-  'app.name': 'Hardware ERP',
+  'app.name': 'Al Qureshi Hardware ERP Pro',
   'app.tagline': 'Inventory, POS and accounting for hardware stores',
 
   'common.save': 'Save',
@@ -441,7 +441,7 @@ export const en = {
   'errors.storage.url_failed': 'Could not load the image: {message}',
   'errors.missing_result': 'The server did not confirm this movement. It stays queued and will be sent again.',
   'errors.auth.failed': 'Sign-in failed: {message}',
-  'app.product': 'Hardware ERP Pro',
+  'app.product': 'Al Qureshi Hardware ERP Pro',
   'dashboard.title': 'Dashboard',
   'dashboard.subtitle': 'Live figures from your database. Figures for modules not built yet are marked.',
   'dashboard.branch': 'Branch',

@@ -1,7 +1,7 @@
 {
   "id": "./",
   "name": "Al Qureshi Hardware ERP Pro",
-  "short_name": "AQ Hardware ERP",
+  "short_name": "Al Qureshi ERP",
   "description": "Inventory, point of sale and purchasing for hardware stores in Saudi Arabia.",
   "start_url": "./",
   "scope": "./",

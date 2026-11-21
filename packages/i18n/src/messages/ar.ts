@@ -1,7 +1,7 @@
 import type { Messages } from './en';
 
 export const ar: Messages = {
-  'app.name': 'نظام العدد والأدوات',
+  'app.name': 'Al Qureshi Hardware ERP Pro',
   'app.tagline': 'المخزون ونقاط البيع والمحاسبة لمحلات العدد والأدوات',
 
   'common.save': 'حفظ',
@@ -442,7 +442,7 @@ export const ar: Messages = {
   'errors.storage.url_failed': 'تعذر تحميل الصورة: {message}',
   'errors.missing_result': 'لم يؤكد الخادم هذه الحركة. تبقى في قائمة الانتظار وستُرسل مرة أخرى.',
   'errors.auth.failed': 'فشل تسجيل الدخول: {message}',
-  'app.product': 'نظام العدد والأدوات برو',
+  'app.product': 'Al Qureshi Hardware ERP Pro',
   'dashboard.title': 'لوحة التحكم',
   'dashboard.subtitle': 'أرقام مباشرة من قاعدة البيانات. الأرقام الخاصة بالوحدات غير المكتملة معلَّمة.',
   'dashboard.branch': 'الفرع',
