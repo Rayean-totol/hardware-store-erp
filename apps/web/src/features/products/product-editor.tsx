@@ -31,8 +31,17 @@ export function ProductEditor({ productId }: { productId: string | null }) {
     enabled: Boolean(productId),
   });
 
+  // Purchase prices are read only by users who may change prices (row policy); the form waits for them
+  // so a late load can never leave a stored cost blank and clear it on save.
+  const seesCosts = can('catalog.price_write');
+  const costs = useQuery({
+    queryKey: ['unit-costs', productId ?? 'new'],
+    queryFn: () => catalog.listUnitCosts(productId!),
+    enabled: Boolean(productId) && seesCosts,
+  });
+
   const title = productId ? t('product.edit_title') : t('product.new_title');
-  const queries = [units, categories, brands, ...(productId ? [product] : [])];
+  const queries = [units, categories, brands, ...(productId ? [product] : []), ...(productId && seesCosts ? [costs] : [])];
   const failed = queries.find((q) => q.error);
   if (failed) {
     return (
@@ -86,7 +95,8 @@ export function ProductEditor({ productId }: { productId: string | null }) {
         categories={categories.data ?? []}
         brands={brands.data ?? []}
         pricesIncludeVat={membership.pricesIncludeVat}
-        canEditPrices={can('catalog.price_write')}
+        canEditPrices={seesCosts}
+        unitCosts={seesCosts ? Object.fromEntries((costs.data ?? []).map((c) => [c.unitId, c.purchasePrice])) : undefined}
         onSave={save}
         onCancel={() => router.push('/products/')}
         onReload={() => void product.refetch()}

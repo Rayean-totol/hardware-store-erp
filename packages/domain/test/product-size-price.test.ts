@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { validateProductDraft, type ProductDraft } from '../src';
+import { planProductImport, validateProductDraft, type ProductDraft } from '../src';
 import { catalog, ORG, U } from './fixtures';
 
 const base = (overrides: Partial<ProductDraft> = {}, unitOverrides: Record<string, unknown> = {}): ProductDraft => ({
@@ -75,5 +75,37 @@ describe('purchase price', () => {
     const r = validateProductDraft(base({}, { salePrice: '5', purchasePrice: '9' }), catalog);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.warnings.map((w) => w.code)).toContain('purchase_above_sale');
+  });
+});
+
+describe('import of size and purchase price (optional CSV columns)', () => {
+  const lookups = {
+    unitsByCode: new Map(Object.entries(U).map(([code, u]) => [code, { ...u, code }])),
+    categoryIdByName: new Map<string, string>(),
+    brandIdByName: new Map<string, string>(),
+    existingBySku: new Map<string, { id: string; rowVersion: number }>(),
+  };
+  const HEAD = 'sku,name_en,name_ar,name_bn,description,category,brand,product_type,base_unit,tax_category,tax_exemption_reason,reorder_level,unit,factor,barcode,sale_price,is_sale,is_purchase';
+
+  it('reads size and purchase price when the file has those columns', () => {
+    const csv = [`${HEAD},size,purchase_price`, 'SZ-1,Size one,صنف,,,,,stock,pcs,S,,,pcs,1,,10,yes,yes,50 kg,6.5'].join('\n');
+    const plan = planProductImport(csv, ORG, lookups);
+    expect(plan.counts).toEqual({ create: 1, update: 0, invalid: 0 });
+    expect(plan.products[0]!.draft!.sizeLabel).toBe('50 kg');
+    expect(plan.products[0]!.draft!.units[0]!.purchasePrice).toBe('6.5');
+  });
+
+  it('a blank size or purchase price cell leaves the stored value alone (undefined, not null)', () => {
+    const csv = [`${HEAD},size,purchase_price`, 'SZ-2,Size two,صنف,,,,,stock,pcs,S,,,pcs,1,,10,yes,yes,,'].join('\n');
+    const plan = planProductImport(csv, ORG, lookups);
+    expect(plan.products[0]!.draft!.sizeLabel).toBeUndefined();
+    expect(plan.products[0]!.draft!.units[0]!.purchasePrice).toBeUndefined();
+  });
+
+  it('a file without these columns plans exactly as before (absent, not cleared)', () => {
+    const csv = [HEAD, 'SZ-3,Size three,صنف,,,,,stock,pcs,S,,,pcs,1,,10,yes,yes'].join('\n');
+    const plan = planProductImport(csv, ORG, lookups);
+    expect(plan.products[0]!.draft!.sizeLabel).toBeUndefined();
+    expect(plan.products[0]!.draft!.units[0]!.purchasePrice).toBeUndefined();
   });
 });
