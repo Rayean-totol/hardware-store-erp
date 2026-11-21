@@ -26,6 +26,11 @@ export const PERMISSIONS = [
   'suppliers.read',
   'suppliers.manage',
   'suppliers.adjust',
+  'purchase.read',
+  'purchase.create',
+  'purchase.approve',
+  'purchase.void',
+  'purchase.cost_view',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -50,11 +55,12 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> = {
     'inventory.read', 'inventory.move', 'inventory.adjust',
     'sales.read', 'sales.create', 'sales.discount', 'sales.price_override', 'sales.credit', 'sales.void',
     'customers.manage', 'suppliers.read', 'suppliers.manage', 'suppliers.adjust',
+    'purchase.read', 'purchase.create', 'purchase.approve', 'purchase.void', 'purchase.cost_view',
   ],
-  storekeeper: ['catalog.read', 'catalog.write', 'inventory.read', 'inventory.move', 'suppliers.read'],
+  storekeeper: ['catalog.read', 'catalog.write', 'inventory.read', 'inventory.move', 'suppliers.read', 'purchase.read'],
   cashier: ['catalog.read', 'inventory.read', 'sales.read', 'sales.create'],
-  accountant: ['catalog.read', 'audit.read', 'inventory.read', 'sales.read', 'suppliers.read'],
-  auditor: ['catalog.read', 'audit.read', 'inventory.read', 'sales.read', 'suppliers.read'],
+  accountant: ['catalog.read', 'audit.read', 'inventory.read', 'sales.read', 'suppliers.read', 'purchase.read', 'purchase.cost_view'],
+  auditor: ['catalog.read', 'audit.read', 'inventory.read', 'sales.read', 'suppliers.read', 'purchase.read', 'purchase.cost_view'],
 };
 
 export function hasPermission(granted: readonly string[], permission: Permission): boolean {

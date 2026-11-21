@@ -38,6 +38,11 @@ const MATRIX: Record<string, string[]> = {
   suppliers: [],
   supplier_counters: [],
   supplier_ledger_entries: [],
+  // Phase 4B (purchase orders). Read and written only through the security-definer functions.
+  purchase_order_counters: [],
+  purchase_orders: [],
+  purchase_order_lines: [],
+  purchase_order_events: [],
 };
 const PRIVILEGES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'] as const;
 
@@ -62,6 +67,13 @@ const PUBLIC_RPCS = [
   'get_supplier(uuid,uuid)',
   'save_supplier(uuid,jsonb,bigint)',
   'post_supplier_adjustment(uuid,uuid,uuid,text,text)',
+  'create_purchase_order(uuid,uuid,uuid,uuid,uuid,date,text,jsonb)',
+  'update_purchase_order(uuid,uuid,bigint,jsonb,jsonb)',
+  'submit_purchase_order(uuid,uuid,bigint)',
+  'approve_purchase_order(uuid,uuid,bigint)',
+  'cancel_purchase_order(uuid,uuid,bigint,text)',
+  'list_purchase_orders(uuid,text,uuid,uuid,date,date,integer,integer)',
+  'get_purchase_order(uuid,uuid)',
 ];
 
 describe('table privileges match the least-privilege matrix', () => {

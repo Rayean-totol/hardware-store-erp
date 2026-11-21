@@ -63,10 +63,11 @@ describe('navigation shell', () => {
     // POS is live for roles with sales.read (Phase 3); the remaining planned modules stay disabled.
     const pos = screen.getByText('POS / Sales');
     expect(pos.closest('a')).toHaveAttribute('href', '/pos/');
-    const purchase = screen.getByText('Purchase');
+    // Purchase orders are live now; Customers is still a planned module.
+    const purchase = screen.getByText('Customers');
     expect(purchase.closest('a')).toBeNull();
     expect(purchase.closest('[aria-disabled="true"]')).not.toBeNull();
-    // Suppliers is live now; the remaining planned modules are still shown as Soon.
-    expect(screen.getAllByText('Soon').length).toBeGreaterThanOrEqual(9);
+    // Suppliers and purchase orders are live; eight planned modules are still shown as Soon.
+    expect(screen.getAllByText('Soon').length).toBeGreaterThanOrEqual(8);
   });
 });

@@ -4,6 +4,7 @@ import {
   createSupabaseInventoryRepository,
   createSupabaseOrgRepository,
   createSupabaseSalesRepository,
+  createSupabasePurchaseOrderRepository,
   createSupabaseSupplierRepository,
   createSupabaseSyncTransport,
   DataError,
@@ -12,6 +13,7 @@ import {
   type InventoryRepository,
   type OrgRepository,
   type SalesRepository,
+  type PurchaseOrderRepository,
   type SupplierRepository,
   type SyncTransport,
 } from '@erp/data';
@@ -38,6 +40,7 @@ export interface Services {
   inventory: InventoryRepository;
   sales: SalesRepository;
   suppliers: SupplierRepository;
+  purchaseOrders: PurchaseOrderRepository;
   /** Backend access for the offline sync engine (same RLS-protected RPCs as the online screens). */
   syncTransport: SyncTransport;
   productImages: ProductImageStore;
@@ -103,6 +106,7 @@ export function createSupabaseServices(config: { url: string; anonKey: string },
     inventory,
     sales: createSupabaseSalesRepository(client),
     suppliers: createSupabaseSupplierRepository(client),
+    purchaseOrders: createSupabasePurchaseOrderRepository(client),
     syncTransport: createSupabaseSyncTransport(client, inventory, catalog),
     productImages,
   };

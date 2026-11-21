@@ -1,4 +1,4 @@
-import type { Brand, CatalogRepository, Category, Customer, InventoryRepository, MembershipContext, OrgRepository, Product, SalesRepository, Supplier, SupplierRepository, SyncTransport, Unit, Warehouse } from '@erp/data';
+import type { Brand, CatalogRepository, Category, Customer, InventoryRepository, MembershipContext, OrgRepository, Product, PurchaseOrder, PurchaseOrderRepository, SalesRepository, Supplier, SupplierRepository, SyncTransport, Unit, Warehouse } from '@erp/data';
 import { ROLE_PERMISSIONS, type SystemRole } from '@erp/domain';
 import type { Locale } from '@erp/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -54,6 +54,15 @@ export const SUPPLIERS: Supplier[] = [
     createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-20T00:00:00Z', rowVersion: 3,
     openingBalance: '1500.50', creditLimit: '20000.00', bankName: 'Al Rajhi', bankAccountName: 'Najd', iban: 'SA0380000000608010167519',
     openingBalanceLocked: false, currentBalance: '1500.50',
+  },
+];
+
+export const PURCHASE_ORDERS: PurchaseOrder[] = [
+  {
+    id: 'po-1', poNumber: 'PO-000001', status: 'draft', supplierId: SUPPLIERS[0]!.id, supplierNameEn: 'Najd Fasteners', supplierNo: 'SUP-000001',
+    branchId: '80000000-0000-4000-8000-000000000001', warehouseId: '70000000-0000-4000-8000-000000000001', expectedDeliveryDate: null,
+    deliveryNotes: null, createdAt: '2026-11-21T08:00:00Z', createdBy: 'u1', submittedAt: null, approvedAt: null, cancelledAt: null,
+    cancelReason: null, rowVersion: 1, lines: [], grandTotal: '57.50',
   },
 ];
 
@@ -150,11 +159,20 @@ export function fakeServices(opts: { role?: SystemRole; products?: Product[] } =
     save: vi.fn(async () => ({ id: 'supplier-new', supplierNo: 'SUP-000002', rowVersion: 1 })),
     adjustBalance: vi.fn(async () => ({ status: 'created' as const, entryId: 'entry-1', balance: '1450.50' })),
   };
+  const purchaseOrders: PurchaseOrderRepository = {
+    list: vi.fn(async () => ({ items: PURCHASE_ORDERS, total: PURCHASE_ORDERS.length, limit: 50, offset: 0 })),
+    get: vi.fn(async (_org, id) => PURCHASE_ORDERS.find((p) => p.id === id) ?? PURCHASE_ORDERS[0]!),
+    create: vi.fn(async () => ({ status: 'created' as const, id: 'po-new', poNumber: 'PO-000002', rowVersion: 1 })),
+    update: vi.fn(async () => ({ status: 'updated' as const, id: 'po-1', poNumber: 'PO-000001', rowVersion: 2 })),
+    submit: vi.fn(async () => ({ status: 'submitted' as const, id: 'po-1', poNumber: 'PO-000001', rowVersion: 2 })),
+    approve: vi.fn(async () => ({ status: 'approved' as const, id: 'po-1', poNumber: 'PO-000001', rowVersion: 3 })),
+    cancel: vi.fn(async () => ({ status: 'cancelled' as const, id: 'po-1', poNumber: 'PO-000001', rowVersion: 2 })),
+  };
   const productImages: ProductImageStore = {
     upload: vi.fn(async () => 'org/product/x.jpg'),
     signedUrl: vi.fn(async () => 'https://example.test/x.jpg'),
   };
-  const services: Services = { catalog, org, auth, inventory, sales, suppliers, syncTransport, productImages };
+  const services: Services = { catalog, org, auth, inventory, sales, suppliers, purchaseOrders, syncTransport, productImages };
   return services;
 }
 

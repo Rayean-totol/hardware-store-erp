@@ -6,7 +6,7 @@ process.env.TEST_PG_DATABASE ??= 'erp_test_concurrency';
 
 export default defineConfig({
   test: {
-    include: ['src/db/pos-concurrency.test.ts', 'src/db/suppliers-concurrency.test.ts'],
+    include: ['src/db/pos-concurrency.test.ts', 'src/db/suppliers-concurrency.test.ts', 'src/db/purchase-orders-concurrency.test.ts'],
     globalSetup: ['src/global-setup.ts'],
     fileParallelism: false,
     testTimeout: 20_000,
