@@ -35,6 +35,7 @@ import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
 import { useI18n } from '@/providers/i18n-provider';
 import { useConnection } from '@/providers/connection-provider';
+import { PhotoSuggest, type PhotoSuggestion } from './photo-suggest';
 
 export interface ProductFormProps {
   orgId: string;
@@ -195,6 +196,23 @@ export function ProductForm(props: ProductFormProps) {
     }));
   }
 
+  /** Applies the reviewed photo suggestions to the draft. Nothing is saved here. */
+  function applyPhotoSuggestion(s: PhotoSuggestion) {
+    update({
+      ...(s.nameEn ? { nameEn: s.nameEn } : {}),
+      ...(s.nameAr ? { nameAr: s.nameAr } : {}),
+      ...(s.nameBn ? { nameBn: s.nameBn } : {}),
+      ...(s.categoryId ? { categoryId: s.categoryId } : {}),
+    });
+    if (s.unitId && s.unitId !== draft.baseUnitId) changeBaseUnit(s.unitId);
+    if (s.barcode) {
+      setDraft((d) => ({
+        ...d,
+        units: d.units.map((u) => (u.isBase && !u.barcode ? { ...u, barcode: s.barcode! } : u)),
+      }));
+    }
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitted(true);
@@ -255,6 +273,15 @@ export function ProductForm(props: ProductFormProps) {
           <p>{t('product.warnings')}</p>
           <ul className="mt-1 list-disc ps-5">{warnings.map((w) => <li key={w.path + w.code}>{issueText(w.code)}</li>)}</ul>
         </Alert>
+      ) : null}
+
+      {product === null ? (
+        <PhotoSuggest
+          orgId={orgId}
+          categories={categories.map((c) => ({ id: c.id, nameEn: c.nameEn, nameAr: c.nameAr, nameBn: c.nameBn ?? null }))}
+          units={units.map((u) => ({ id: u.id, code: u.code }))}
+          onApply={applyPhotoSuggestion}
+        />
       ) : null}
 
       <Card>

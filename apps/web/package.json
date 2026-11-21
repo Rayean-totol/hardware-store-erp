@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
-    "build": "next build && node scripts/stamp-sw.mjs",
+    "build": "node scripts/copy-ocr.mjs && next build && node scripts/stamp-sw.mjs",
     "start": "npx serve out",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
@@ -24,10 +24,14 @@
     "lucide-react": "^1.77.0",
     "next": "^16.4.6",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.5",
+    "@tesseract.js-data/ara": "1.0.0",
+    "@tesseract.js-data/ben": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
     "@testing-library/jest-dom": "^8.0.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.13",

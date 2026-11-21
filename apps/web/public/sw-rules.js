@@ -2,8 +2,8 @@
  * Cache rules for the service worker. Plain script (no modules) so the service worker can load it
  * with importScripts(). The same file is imported by the unit tests.
  *
- * Only safe static assets are cached: hashed Next.js bundles and the app icons, manifest and
- * offline page. Everything else goes straight to the network: Supabase and any other origin,
+ * Only safe static assets are cached: hashed Next.js bundles, the OCR engine and language data, the
+ * app icons, manifest and offline page. Everything else goes straight to the network: Supabase and any other origin,
  * API and business data, any request carrying credentials, and all non-GET requests.
  */
 /* global module */
@@ -24,6 +24,8 @@
     if (url.pathname.indexOf(req.scope) !== 0) return 'network';
     var rest = url.pathname.slice(req.scope.length);
     if (rest.indexOf('_next/static/') === 0) return 'static';
+    // Offline OCR engine and language data (built from installed packages, see scripts/copy-ocr.mjs).
+    if (rest.indexOf('ocr/') === 0) return 'static';
     if (PRECACHE.indexOf(rest) !== -1) return 'static';
     if (req.mode === 'navigate') return 'navigation';
     return 'network';

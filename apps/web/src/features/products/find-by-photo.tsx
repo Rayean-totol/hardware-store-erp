@@ -10,20 +10,10 @@ import { PageHeader } from '@/components/page-header';
 import { useI18n } from '@/providers/i18n-provider';
 import { useMembership } from '@/providers/session-provider';
 import { useServices } from '@/providers/services-provider';
-import { type HashedProduct, dHashFromGrey, greyFromImage, rankPhotoMatches, type PhotoMatch } from './photo-hash';
+import { hashPhotoFile, hashProductPhotos } from './photo-index';
+import { type PhotoMatch, rankPhotoMatches } from './photo-hash';
 
-/** Hashes already computed in this browser session, keyed by storage path. Never stored or sent anywhere. */
-const hashCache = new Map<string, string>();
 const CANDIDATE_LIMIT = 300;
-const WORKERS = 4;
-
-async function hashStoredImage(url: string): Promise<string> {
-  const img = new Image();
-  img.crossOrigin = 'anonymous';
-  img.src = url;
-  await img.decode();
-  return dHashFromGrey(greyFromImage(img));
-}
 
 export function FindByPhoto() {
   const { t, name } = useI18n();
@@ -63,36 +53,20 @@ export function FindByPhoto() {
     setFailed(false);
     setMatches(null);
     try {
-      const bitmap = await createImageBitmap(file);
-      const q = dHashFromGrey(greyFromImage(bitmap));
-      bitmap.close();
-
+      const query = await hashPhotoFile(file);
       setTotal(withImages.length);
       setDone(0);
-      const hashed: HashedProduct[] = [];
-      const byId = new Map<string, Product>();
-      let next = 0;
-      const worker = async () => {
-        while (next < withImages.length) {
-          const product = withImages[next++]!;
-          byId.set(product.id, product);
-          try {
-            let hash = hashCache.get(product.imagePath!);
-            if (!hash) {
-              const url = await productImages.signedUrl(product.imagePath!);
-              hash = await hashStoredImage(url);
-              hashCache.set(product.imagePath!, hash);
-            }
-            hashed.push({ id: product.id, hash });
-          } catch {
-            // One unreadable product photo is skipped; the rest still count.
-          }
-          setDone((d) => d + 1);
-        }
-      };
-      await Promise.all(Array.from({ length: Math.min(WORKERS, withImages.length) }, () => worker()));
+      const byId = new Map(withImages.map((p) => [p.id, p] as const));
+      const hashed = await hashProductPhotos(
+        withImages.map((p) => ({ id: p.id, imagePath: p.imagePath! })),
+        (path) => productImages.signedUrl(path),
+        (d, n) => {
+          setDone(d);
+          setTotal(n);
+        },
+      );
       setProducts(byId);
-      setMatches(rankPhotoMatches(q, hashed, 5));
+      setMatches(rankPhotoMatches(query, hashed, 5));
     } catch {
       setFailed(true);
     } finally {

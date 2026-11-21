@@ -171,3 +171,6 @@ next-env.d.ts
 
 # End-to-end run output (generated)
 tests/e2e/e2e-report.json
+
+# Generated OCR engine and language data (apps/web/scripts/copy-ocr.mjs)
+apps/web/public/ocr/
