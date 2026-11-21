@@ -30,6 +30,8 @@ const MATRIX: Record<string, string[]> = {
   product_prices: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
   // Purchase prices: the row policies (catalog.price_write) decide who sees and changes them.
   product_unit_costs: ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
+  // AI photo budget: closed to app users; only ai_photo_reserve (security definer) reads or writes it.
+  ai_photo_usage: [],
   // Phase 3 (POS). Sales documents are written only by finalize_sale / cancel_sale.
   customers: ['SELECT', 'INSERT', 'UPDATE'],
   sales: ['SELECT'],
@@ -48,6 +50,7 @@ const PUBLIC_RPCS = [
   'save_product(jsonb,jsonb,bigint)',
   'search_products(uuid,text,uuid,boolean,uuid)',
   'save_product_prices(uuid,uuid,jsonb)',
+  'ai_photo_reserve(uuid,bigint,bigint)',
   'resolve_sale_price(uuid,uuid,numeric,text)',
   'apply_stock_movements(uuid,text,jsonb)',
   'list_stock_levels(uuid)',
