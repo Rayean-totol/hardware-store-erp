@@ -20,6 +20,12 @@ export default tseslint.config(
     },
   },
   {
+    // Browser harness (CommonJS, runs under Node with Playwright and evaluates code in the page).
+    files: ['tests/e2e/**/*.cjs'],
+    languageOptions: { sourceType: 'commonjs', globals: { ...globals.node, ...globals.browser } },
+    rules: { '@typescript-eslint/no-require-imports': 'off', 'no-console': 'off' },
+  },
+  {
     // Node CLI scripts: console output is their interface.
     files: ['scripts/**/*.{js,mjs}', '*.{js,mjs}'],
     languageOptions: { globals: globals.node },
