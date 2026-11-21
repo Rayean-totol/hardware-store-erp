@@ -1,0 +1,11 @@
+sku,name_en,name_ar,name_bn,description,category,brand,product_type,base_unit,tax_category,tax_exemption_reason,reorder_level,unit,factor,barcode,sale_price,is_sale,is_purchase
+DEMO-PVC-PIPE,PVC Pipe (DEMO),ماسورة PVC (تجريبي),,DEMO item for testing - not real stock,Plumbing,,stock,m,S,,,m,1,,12,yes,yes
+DEMO-PVC-ELBOW,PVC Elbow (DEMO),كوع PVC (تجريبي),,DEMO item for testing - not real stock,Plumbing,,stock,pcs,S,,,pcs,1,,3,yes,yes
+DEMO-LED-BULB,LED Bulb (DEMO),لمبة LED (تجريبي),,DEMO item for testing - not real stock,Electrical,,stock,pcs,S,,,pcs,1,,8,yes,yes
+DEMO-ELEC-CABLE,Electrical Cable (DEMO),كيبل كهرباء (تجريبي),,DEMO item for testing - not real stock,Cables & wires,,stock,m,S,,,m,1,,45,yes,yes
+DEMO-CEMENT-BAG,Cement Bag (DEMO),كيس أسمنت (تجريبي),,DEMO item for testing - not real stock,Building materials,,stock,bag,S,,,bag,1,,18,yes,yes
+DEMO-HAMMER,Hammer (DEMO),مطرقة (تجريبي),,DEMO item for testing - not real stock,Hand tools,,stock,pcs,S,,,pcs,1,,15,yes,yes
+DEMO-ADJ-WRENCH,Adjustable Wrench (DEMO),مفتاح إنجليزي (تجريبي),,DEMO item for testing - not real stock,Hand tools,,stock,pcs,S,,,pcs,1,,22,yes,yes
+DEMO-MEAS-TAPE,Measuring Tape (DEMO),شريط قياس (تجريبي),,DEMO item for testing - not real stock,Hand tools,,stock,pcs,S,,,pcs,1,,10,yes,yes
+DEMO-BOLT-NUT,Bolt & Nut (DEMO),برغي وصامولة (تجريبي),,DEMO item for testing - not real stock,Bolts & nuts,,stock,pcs,S,,,pcs,1,,2,yes,yes
+DEMO-PL-BUCKET,Plastic Bucket (DEMO),سطل بلاستيك (تجريبي),,DEMO item for testing - not real stock,Building materials,,stock,bucket,S,,,bucket,1,,9,yes,yes
