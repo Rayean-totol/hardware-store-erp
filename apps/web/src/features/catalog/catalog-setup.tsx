@@ -29,11 +29,13 @@ import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
 import { catalogKeys, useBrands, useCategories } from '../products/use-catalog-data';
+import { useConnection } from '@/providers/connection-provider';
 
 const blankCategory = { id: undefined as string | undefined, parentId: '', nameEn: '', nameAr: '', nameBn: '', sortOrder: '0', isActive: true };
 const blankBrand = { id: undefined as string | undefined, name: '', isActive: true };
 
 function CategoriesCard({ canWrite }: { canWrite: boolean }) {
+  const { writable } = useConnection();
   const { t, name } = useI18n();
   const { orgId } = useMembership();
   const { catalog } = useServices();
@@ -106,7 +108,7 @@ function CategoriesCard({ canWrite }: { canWrite: boolean }) {
 
         {canWrite ? (
           <form
-            className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2"
+            className="grid grid-cols-1 gap-3 rounded-lg border p-3 sm:grid-cols-2"
             onSubmit={(e) => {
               e.preventDefault();
               setSubmitted(true);
@@ -141,7 +143,7 @@ function CategoriesCard({ canWrite }: { canWrite: boolean }) {
               {t('common.active')}
             </label>
             <div className="flex gap-2 sm:col-span-2">
-              <Button type="submit" disabled={save.isPending}>{form.id ? t('common.save') : t('catalog.add_category')}</Button>
+              <Button type="submit" disabled={save.isPending || !writable}>{form.id ? t('common.save') : t('catalog.add_category')}</Button>
               {form.id ? <Button variant="outline" onClick={() => setForm(blankCategory)}>{t('common.cancel')}</Button> : null}
             </div>
           </form>
@@ -152,6 +154,7 @@ function CategoriesCard({ canWrite }: { canWrite: boolean }) {
 }
 
 function BrandsCard({ canWrite }: { canWrite: boolean }) {
+  const { writable } = useConnection();
   const { t } = useI18n();
   const { orgId } = useMembership();
   const { catalog } = useServices();
@@ -204,7 +207,7 @@ function BrandsCard({ canWrite }: { canWrite: boolean }) {
               <Checkbox checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
               {t('common.active')}
             </label>
-            <Button type="submit" disabled={save.isPending}>{form.id ? t('common.save') : t('catalog.add_brand')}</Button>
+            <Button type="submit" disabled={save.isPending || !writable}>{form.id ? t('common.save') : t('catalog.add_brand')}</Button>
             {form.id ? <Button variant="outline" onClick={() => setForm(blankBrand)}>{t('common.cancel')}</Button> : null}
           </form>
         ) : null}
@@ -219,7 +222,7 @@ export function CatalogSetup() {
   return (
     <>
       <PageHeader title={t('nav.catalog_setup')} />
-      <div className="grid gap-6 xl:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <CategoriesCard canWrite={can('catalog.write')} />
         <BrandsCard canWrite={can('catalog.write')} />
       </div>

@@ -168,3 +168,6 @@ supabase/.temp
 *.tsbuildinfo
 !.env.example
 next-env.d.ts
+
+# End-to-end run output (generated)
+tests/e2e/e2e-report.json

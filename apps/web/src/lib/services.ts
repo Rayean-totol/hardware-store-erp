@@ -4,14 +4,12 @@ import {
   createSupabaseInventoryRepository,
   createSupabaseOrgRepository,
   createSupabaseSalesRepository,
-  createSupabaseSyncTransport,
   DataError,
   toDataError,
   type CatalogRepository,
   type InventoryRepository,
   type OrgRepository,
   type SalesRepository,
-  type SyncTransport,
 } from '@erp/data';
 
 export interface AuthUser {
@@ -35,8 +33,6 @@ export interface Services {
   org: OrgRepository;
   inventory: InventoryRepository;
   sales: SalesRepository;
-  /** Backend access for the offline sync engine (same RLS-protected RPCs as the online screens). */
-  syncTransport: SyncTransport;
   productImages: ProductImageStore;
 }
 
@@ -73,7 +69,11 @@ export function createSupabaseServices(config: { url: string; anonKey: string },
     },
     async signOut() {
       const { error } = await client.auth.signOut();
-      if (error) throw toDataError(error);
+      if (error) {
+        // Offline or server trouble: still remove the session from this device.
+        const local = await client.auth.signOut({ scope: 'local' });
+        if (local.error) throw toDataError(local.error);
+      }
     },
   };
 
@@ -99,7 +99,6 @@ export function createSupabaseServices(config: { url: string; anonKey: string },
     org: createSupabaseOrgRepository(client),
     inventory,
     sales: createSupabaseSalesRepository(client),
-    syncTransport: createSupabaseSyncTransport(client, inventory, catalog),
     productImages,
   };
 }

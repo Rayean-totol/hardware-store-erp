@@ -63,7 +63,7 @@ export function LabelPrinter() {
         <PageHeader title={t('labels.title')} actions={
           <Button onClick={() => window.print()} disabled={labels.length === 0}><Printer aria-hidden="true" />{t('labels.print')}</Button>
         } />
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <Card>
             <CardContent className="flex flex-col gap-4 pt-5">
               <Field label={t('products.search_placeholder')}>

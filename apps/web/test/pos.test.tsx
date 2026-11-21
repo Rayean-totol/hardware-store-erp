@@ -1,6 +1,6 @@
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { PosScreen } from '@/features/pos/pos-screen';
 import { CUSTOMERS, HAMMER, fakeServices, renderWithProviders } from './helpers';
 
@@ -79,13 +79,8 @@ describe('POS', () => {
   });
 
   describe('offline', () => {
-    afterEach(() => {
-      Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => true });
-    });
-
     it('checkout is refused while offline, and the reason is shown', async () => {
-      Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false });
-      renderWithProviders(<PosScreen />);
+      renderWithProviders(<PosScreen />, { connection: 'offline' });
       await addHammer();
       expect(await screen.findByText(/You are offline/)).toBeInTheDocument();
       expect(checkoutButton()).toBeDisabled();
