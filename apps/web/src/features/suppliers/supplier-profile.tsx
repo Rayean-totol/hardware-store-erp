@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/page-header';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
+import { useConnection } from '@/providers/connection-provider';
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -23,6 +24,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 /** Posts an audited balance adjustment. The idempotency key lives until a success, so a retry cannot post twice. */
 function AdjustBalance({ supplierId, onDone }: { supplierId: string; onDone: () => void }) {
+  const { writable } = useConnection();
   const { t, fmt } = useI18n();
   const { suppliers } = useServices();
   const { orgId } = useMembership();
@@ -56,7 +58,7 @@ function AdjustBalance({ supplierId, onDone }: { supplierId: string; onDone: () 
     <Card>
       <CardHeader><CardTitle className="text-base">{t('supplier.adjust_title')}</CardTitle></CardHeader>
       <CardContent>
-        <form onSubmit={submit} className="grid gap-3" noValidate>
+        <form onSubmit={submit} className="grid grid-cols-1 gap-3" noValidate>
           <p className="text-xs text-muted-foreground">{t('supplier.adjust_hint')}</p>
           <Field label={t('supplier.adjust_amount')} id="adj-amount" required>
             {(p) => <Input {...p} value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" dir="ltr" />}
@@ -67,7 +69,7 @@ function AdjustBalance({ supplierId, onDone }: { supplierId: string; onDone: () 
           {message ? <Alert variant="success">{message}</Alert> : null}
           {error ? <ErrorAlert error={error} /> : null}
           <div className="flex justify-end">
-            <Button type="submit" disabled={busy}>{busy ? t('common.saving') : t('supplier.adjust_submit')}</Button>
+            <Button type="submit" disabled={busy || !writable}>{busy ? t('common.saving') : t('supplier.adjust_submit')}</Button>
           </div>
         </form>
       </CardContent>
@@ -108,7 +110,7 @@ export function SupplierProfile({ supplierId }: { supplierId: string }) {
         }
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader><CardTitle className="text-base">{t('supplier.profile_details')}</CardTitle></CardHeader>
           <CardContent>

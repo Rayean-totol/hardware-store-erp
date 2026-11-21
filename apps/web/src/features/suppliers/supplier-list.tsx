@@ -161,7 +161,7 @@ export function SupplierList() {
           </Card>
 
           {/* Small screens: cards */}
-          <ul className="grid gap-3 md:hidden">
+          <ul className="grid grid-cols-1 gap-3 md:hidden">
             {list.data?.items.map((s) => (
               <li key={s.id}>
                 <Card className={`p-4 ${s.isActive ? '' : 'opacity-60'}`}>

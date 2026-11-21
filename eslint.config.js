@@ -20,6 +20,12 @@ export default tseslint.config(
     },
   },
   {
+    // Service worker and its rule file run in the worker global scope (not the page).
+    files: ['apps/web/public/**/*.js'],
+    languageOptions: { sourceType: 'script', globals: { ...globals.serviceworker, ...globals.browser } },
+    rules: { 'no-console': 'off' },
+  },
+  {
     // Browser harness (CommonJS, runs under Node with Playwright and evaluates code in the page).
     files: ['tests/e2e/**/*.cjs'],
     languageOptions: { sourceType: 'commonjs', globals: { ...globals.node, ...globals.browser } },
@@ -27,7 +33,7 @@ export default tseslint.config(
   },
   {
     // Node CLI scripts: console output is their interface.
-    files: ['scripts/**/*.{js,mjs}', '*.{js,mjs}'],
+    files: ['scripts/**/*.{js,mjs}', 'apps/web/scripts/**/*.{js,mjs}', '*.{js,mjs}'],
     languageOptions: { globals: globals.node },
     rules: { 'no-console': 'off' },
   },

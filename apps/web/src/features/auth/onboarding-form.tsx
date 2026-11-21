@@ -10,8 +10,10 @@ import { LanguageSwitcher } from '@/components/language-switcher';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useSession } from '@/providers/session-provider';
+import { useConnection } from '@/providers/connection-provider';
 
 export function OnboardingForm() {
+  const { writable } = useConnection();
   const { t, locale } = useI18n();
   const { org } = useServices();
   const session = useSession();
@@ -68,7 +70,7 @@ export function OnboardingForm() {
           <CardTitle>{t('onboarding.title')}</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+          <form onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Alert variant="info" className="sm:col-span-2">{t('onboarding.no_membership')}</Alert>
             {create.error ? <div className="sm:col-span-2"><ErrorAlert error={create.error} /></div> : null}
             <Field label={t('onboarding.legal_name_en')} required error={required(form.legalNameEn)}>
@@ -94,7 +96,7 @@ export function OnboardingForm() {
               {(p) => <Input {...p} dir="rtl" lang="ar" value={form.branchNameAr} onChange={set('branchNameAr')} />}
             </Field>
             <div className="sm:col-span-2">
-              <Button type="submit" disabled={create.isPending}>
+              <Button type="submit" disabled={create.isPending || !writable}>
                 {create.isPending ? t('common.saving') : t('onboarding.submit')}
               </Button>
             </div>

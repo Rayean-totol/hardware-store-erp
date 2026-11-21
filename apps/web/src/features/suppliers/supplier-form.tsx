@@ -11,6 +11,7 @@ import { PageHeader } from '@/components/page-header';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
+import { useConnection } from '@/providers/connection-provider';
 
 type Form = Record<keyof Omit<SupplierInput, 'id' | 'isActive'>, string> & { isActive: boolean };
 
@@ -32,6 +33,7 @@ function toForm(s: Supplier): Form {
 
 /** Create or edit a supplier. An edit sends the version it loaded, so a stale copy is refused. */
 export function SupplierForm({ supplierId }: { supplierId: string | null }) {
+  const { writable } = useConnection();
   const { t } = useI18n();
   const { suppliers } = useServices();
   const { orgId } = useMembership();
@@ -109,14 +111,14 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
   return (
     <>
       <PageHeader title={title} />
-      <form onSubmit={submit} noValidate className="grid gap-4 lg:grid-cols-2">
+      <form onSubmit={submit} noValidate className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {saved ? <Alert variant="success" className="lg:col-span-2">{t('supplier.saved', { no: saved })}</Alert> : null}
         {issue ? <Alert variant="warning" className="lg:col-span-2">{t(`errors.${issue}`)}</Alert> : null}
         {saveError ? <div className="lg:col-span-2"><ErrorAlert error={saveError} /></div> : null}
 
         <Card>
           <CardHeader><CardTitle className="text-base">{t('supplier.section_identity')}</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="grid grid-cols-1 gap-3">
             <Field label={t('supplier.field_code')} id="s-code" hint={supplierId ? undefined : t('supplier.hint_code')}>{(p) => (<Input {...p} value={form.supplierCode} onChange={(e) => set('supplierCode')(e.target.value)} dir="ltr" maxLength={40} />)}</Field>
             <Field label={t('supplier.field_name_en')} id="s-name-en" required>{(p) => (<Input {...p} value={form.nameEn} onChange={(e) => set('nameEn')(e.target.value)} maxLength={200} />)}</Field>
             <Field label={t('supplier.field_name_ar')} id="s-name-ar" required>{(p) => (<Input {...p} value={form.nameAr} onChange={(e) => set('nameAr')(e.target.value)} maxLength={200} dir="rtl" />)}</Field>
@@ -130,9 +132,9 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
 
         <Card>
           <CardHeader><CardTitle className="text-base">{t('supplier.section_contact')}</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="grid grid-cols-1 gap-3">
             <Field label={t('supplier.field_contact_person')} id="s-contact">{(p) => (<Input {...p} value={form.contactPerson} onChange={(e) => set('contactPerson')(e.target.value)} maxLength={120} />)}</Field>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label={t('supplier.field_mobile')} id="s-mobile">{(p) => (<Input {...p} value={form.mobile} onChange={(e) => set('mobile')(e.target.value)} inputMode="tel" dir="ltr" />)}</Field>
               <Field label={t('supplier.field_whatsapp')} id="s-whatsapp">{(p) => (<Input {...p} value={form.whatsapp} onChange={(e) => set('whatsapp')(e.target.value)} inputMode="tel" dir="ltr" />)}</Field>
             </div>
@@ -142,9 +144,9 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
 
         <Card>
           <CardHeader><CardTitle className="text-base">{t('supplier.section_address')}</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="grid grid-cols-1 gap-3">
             <Field label={t('supplier.field_address')} id="s-address">{(p) => (<Input {...p} value={form.address} onChange={(e) => set('address')(e.target.value)} maxLength={300} />)}</Field>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <Field label={t('supplier.field_city')} id="s-city">{(p) => (<Input {...p} value={form.city} onChange={(e) => set('city')(e.target.value)} maxLength={100} />)}</Field>
               <Field label={t('supplier.field_country')} id="s-country">{(p) => (<NativeSelect {...p} value={form.countryCode} onChange={(e) => set('countryCode')(e.target.value)}>
                   <option value="SA">{t('supplier.country_sa')}</option>
@@ -155,7 +157,7 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
 
         <Card>
           <CardHeader><CardTitle className="text-base">{t('supplier.section_tax')}</CardTitle></CardHeader>
-          <CardContent className="grid gap-3">
+          <CardContent className="grid grid-cols-1 gap-3">
             <Field label={t('supplier.field_vat')} id="s-vat" hint={t('supplier.hint_vat')}>{(p) => (<Input {...p} value={form.vatNumber} onChange={(e) => set('vatNumber')(e.target.value)} inputMode="numeric" dir="ltr" maxLength={15} />)}</Field>
             <Field label={t('supplier.field_cr')} id="s-cr">{(p) => (<Input {...p} value={form.crNumber} onChange={(e) => set('crNumber')(e.target.value)} inputMode="numeric" dir="ltr" maxLength={10} />)}</Field>
           </CardContent>
@@ -164,12 +166,12 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
         {canFinance ? (
           <Card>
             <CardHeader><CardTitle className="text-base">{t('supplier.section_financial')}</CardTitle></CardHeader>
-            <CardContent className="grid gap-3">
-              <div className="grid gap-3 sm:grid-cols-2">
+            <CardContent className="grid grid-cols-1 gap-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label={t('supplier.field_opening_balance')} id="s-opening" hint={locked ? t('supplier.opening_locked_hint') : t('supplier.hint_opening')}>{(p) => (<Input {...p} disabled={locked} value={form.openingBalance} onChange={(e) => set('openingBalance')(e.target.value)} inputMode="decimal" dir="ltr" />)}</Field>
                 <Field label={t('supplier.field_credit_limit')} id="s-credit" optionalLabel={t('common.optional')}>{(p) => (<Input {...p} value={form.creditLimit} onChange={(e) => set('creditLimit')(e.target.value)} inputMode="decimal" dir="ltr" />)}</Field>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label={t('supplier.field_payment_terms')} id="s-terms" hint={t('supplier.hint_terms')}>{(p) => (<Input {...p} value={form.paymentTermsDays} onChange={(e) => set('paymentTermsDays')(e.target.value)} inputMode="numeric" dir="ltr" />)}</Field>
                 <Field label={t('supplier.field_currency')} id="s-currency">{(p) => (<Input {...p} value="SAR" readOnly dir="ltr" />)}</Field>
               </div>
@@ -180,7 +182,7 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
         {canFinance ? (
           <Card>
             <CardHeader><CardTitle className="text-base">{t('supplier.section_bank')}</CardTitle></CardHeader>
-            <CardContent className="grid gap-3">
+            <CardContent className="grid grid-cols-1 gap-3">
               <Field label={t('supplier.field_bank_name')} id="s-bank">{(p) => (<Input {...p} value={form.bankName} onChange={(e) => set('bankName')(e.target.value)} maxLength={120} />)}</Field>
               <Field label={t('supplier.field_bank_account_name')} id="s-bank-acc">{(p) => (<Input {...p} value={form.bankAccountName} onChange={(e) => set('bankAccountName')(e.target.value)} maxLength={120} />)}</Field>
               <Field label={t('supplier.field_iban')} id="s-iban" hint={t('supplier.hint_iban')}>{(p) => (<Input {...p} value={form.iban} onChange={(e) => set('iban')(e.target.value)} dir="ltr" maxLength={34} />)}</Field>
@@ -208,7 +210,7 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
           <Button type="button" variant="outline" onClick={() => router.push(supplierId ? `/suppliers/profile/?id=${supplierId}` : '/suppliers/')}>
             {t('common.cancel')}
           </Button>
-          <Button type="submit" disabled={saving}>{saving ? t('common.saving') : t('supplier.save')}</Button>
+          <Button type="submit" disabled={saving || !writable}>{saving ? t('common.saving') : t('supplier.save')}</Button>
         </div>
       </form>
     </>

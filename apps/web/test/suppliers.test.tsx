@@ -13,11 +13,6 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-vi.mock('@/providers/sync-provider', () => ({
-  useSync: () => ({ status: 'online', pending: 0, flush: async () => undefined }),
-  SyncProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
-
 const NAJD = SUPPLIERS[0]!;
 
 describe('supplier directory', () => {

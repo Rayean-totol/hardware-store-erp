@@ -12,9 +12,11 @@ import { PageHeader } from '@/components/page-header';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
+import { useConnection } from '@/providers/connection-provider';
 
 /** One purchase order with the actions the user may take. The server checks every action again. */
 export function PurchaseDetail({ orderId }: { orderId: string }) {
+  const { writable } = useConnection();
   const { t, fmt } = useI18n();
   const { purchaseOrders } = useServices();
   const membership = useMembership();
@@ -71,7 +73,7 @@ export function PurchaseDetail({ orderId }: { orderId: string }) {
       {note ? <Alert variant="success" className="mb-4">{note}</Alert> : null}
       {error ? <div className="mb-4"><ErrorAlert error={error} /></div> : null}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.3fr)]">
         <Card>
           <CardHeader><CardTitle className="text-base">{t('purchase.section_header')}</CardTitle></CardHeader>
           <CardContent>
@@ -128,10 +130,10 @@ export function PurchaseDetail({ orderId }: { orderId: string }) {
             <Card>
               <CardContent className="flex flex-wrap gap-2 p-4">
                 {actions.includes('submit') ? (
-                  <Button disabled={busy !== null} onClick={() => void run('submit')}>{busy === 'submit' ? t('common.saving') : t('purchase.submit')}</Button>
+                  <Button disabled={busy !== null || !writable} onClick={() => void run('submit')}>{busy === 'submit' ? t('common.saving') : t('purchase.submit')}</Button>
                 ) : null}
                 {actions.includes('approve') ? (
-                  <Button disabled={busy !== null} onClick={() => void run('approve')}>{busy === 'approve' ? t('common.saving') : t('purchase.approve')}</Button>
+                  <Button disabled={busy !== null || !writable} onClick={() => void run('approve')}>{busy === 'approve' ? t('common.saving') : t('purchase.approve')}</Button>
                 ) : null}
               </CardContent>
             </Card>
@@ -140,12 +142,12 @@ export function PurchaseDetail({ orderId }: { orderId: string }) {
           {actions.includes('cancel') ? (
             <Card>
               <CardHeader><CardTitle className="text-base">{t('purchase.cancel_title')}</CardTitle></CardHeader>
-              <CardContent className="grid gap-3">
+              <CardContent className="grid grid-cols-1 gap-3">
                 <Field label={t('purchase.cancel_reason')} id="cancel-reason" required>
                   {(p) => <Input {...p} value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />}
                 </Field>
                 <div className="flex justify-end">
-                  <Button variant="destructive" disabled={busy !== null || reason.trim().length < 5} onClick={() => void run('cancel')}>
+                  <Button variant="destructive" disabled={busy !== null || reason.trim().length < 5 || !writable} onClick={() => void run('cancel')}>
                     {busy === 'cancel' ? t('common.saving') : t('purchase.cancel_order')}
                   </Button>
                 </div>
