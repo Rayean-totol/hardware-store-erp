@@ -15,6 +15,40 @@
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
+-- 0. Preflight: stop with a clear message if migrations 1-11 are not in place.
+-- Read-only. Nothing is changed when this block passes or fails.
+-- -----------------------------------------------------------------------------
+do $$
+declare
+  v_missing text[] := '{}';
+begin
+  if to_regclass('public.organizations') is null then v_missing := array_append(v_missing, 'table public.organizations'); end if;
+  if to_regclass('public.branches') is null then v_missing := array_append(v_missing, 'table public.branches'); end if;
+  if to_regclass('public.warehouses') is null then v_missing := array_append(v_missing, 'table public.warehouses'); end if;
+  if to_regclass('public.products') is null then v_missing := array_append(v_missing, 'table public.products'); end if;
+  if to_regclass('public.product_units') is null then v_missing := array_append(v_missing, 'table public.product_units'); end if;
+  if to_regclass('public.units') is null then v_missing := array_append(v_missing, 'table public.units'); end if;
+  if to_regclass('public.stock_levels') is null then v_missing := array_append(v_missing, 'table public.stock_levels'); end if;
+  if to_regclass('public.stock_movements') is null then v_missing := array_append(v_missing, 'table public.stock_movements'); end if;
+  if to_regclass('public.memberships') is null then v_missing := array_append(v_missing, 'table public.memberships'); end if;
+  if to_regclass('public.permissions') is null then v_missing := array_append(v_missing, 'table public.permissions'); end if;
+  if to_regclass('public.roles') is null then v_missing := array_append(v_missing, 'table public.roles'); end if;
+  if to_regclass('public.audit_log') is null then v_missing := array_append(v_missing, 'table public.audit_log'); end if;
+  if to_regprocedure('app.fail(text,text)') is null then v_missing := array_append(v_missing, 'function app.fail'); end if;
+  if to_regprocedure('app.has_permission(uuid,text)') is null then v_missing := array_append(v_missing, 'function app.has_permission'); end if;
+  if to_regprocedure('app.can_access_branch(uuid)') is null then v_missing := array_append(v_missing, 'function app.can_access_branch'); end if;
+  if to_regprocedure('app.is_org_member(uuid)') is null then v_missing := array_append(v_missing, 'function app.is_org_member'); end if;
+  if to_regprocedure('app.touch_row()') is null then v_missing := array_append(v_missing, 'function app.touch_row'); end if;
+  if to_regprocedure('app.audit_row_change()') is null then v_missing := array_append(v_missing, 'function app.audit_row_change'); end if;
+  if to_regprocedure('public.apply_stock_movements(uuid,text,jsonb)') is null then v_missing := array_append(v_missing, 'function public.apply_stock_movements'); end if;
+  if array_length(v_missing, 1) > 0 then
+    raise exception 'POS/Sales prerequisites are missing: %. Apply migrations 20261120000100 to 20261123000100 first.', array_to_string(v_missing, ', ')
+      using errcode = 'P0001', hint = 'No POS objects were created.';
+  end if;
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
 -- 1. Permissions and role grants
 -- -----------------------------------------------------------------------------
 insert into public.permissions (code, module, description) values
@@ -713,3 +747,8 @@ revoke all on function app.sale_summary(uuid, text) from public, anon, authentic
 revoke all on function app.sale_documents_immutable() from public, anon;
 
 notify pgrst, 'reload schema';
+
+-- -----------------------------------------------------------------------------
+-- 10. Version marker (lets you confirm which file was applied; read with obj_description)
+-- -----------------------------------------------------------------------------
+comment on table public.sales is 'Phase 3 POS/Sales migration 20261124000100 (v2: preflight, branch-checked replays, idempotent cancel).';
