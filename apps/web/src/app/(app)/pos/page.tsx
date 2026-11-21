@@ -1,0 +1,7 @@
+'use client';
+
+import { PosScreen } from '@/features/pos/pos-screen';
+
+export default function PosPage() {
+  return <PosScreen />;
+}

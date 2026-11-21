@@ -11,3 +11,4 @@ export * from './stock';
 export * from './pricing';
 export * from './csv';
 export * from './product-csv';
+export * from './sales';

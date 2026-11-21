@@ -48,9 +48,12 @@ describe('navigation shell', () => {
     renderWithProviders(<AppShell><div>content</div></AppShell>, { services: fakeServices() });
     const dashboardLink = (await screen.findByText('Dashboard')).closest('a');
     expect(dashboardLink).toHaveAttribute('href', '/dashboard/');
+    // POS is live for roles with sales.read (Phase 3); the remaining planned modules stay disabled.
     const pos = screen.getByText('POS / Sales');
-    expect(pos.closest('a')).toBeNull();
-    expect(pos.closest('[aria-disabled="true"]')).not.toBeNull();
+    expect(pos.closest('a')).toHaveAttribute('href', '/pos/');
+    const purchase = screen.getByText('Purchase');
+    expect(purchase.closest('a')).toBeNull();
+    expect(purchase.closest('[aria-disabled="true"]')).not.toBeNull();
     expect(screen.getAllByText('Soon').length).toBeGreaterThanOrEqual(10);
   });
 });
