@@ -13,3 +13,4 @@ export * from './csv';
 export * from './product-csv';
 export * from './sales';
 export * from './supplier';
+export * from './purchase';
