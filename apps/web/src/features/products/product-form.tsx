@@ -275,18 +275,17 @@ export function ProductForm(props: ProductFormProps) {
         </Alert>
       ) : null}
 
-      {product === null ? (
-        <PhotoSuggest
-          orgId={orgId}
-          categories={categories.map((c) => ({ id: c.id, nameEn: c.nameEn, nameAr: c.nameAr, nameBn: c.nameBn ?? null }))}
-          units={units.map((u) => ({ id: u.id, code: u.code }))}
-          onApply={applyPhotoSuggestion}
-        />
-      ) : null}
-
       <Card>
         <CardHeader><CardTitle>{t('product.section_general')}</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {product === null ? (
+            <PhotoSuggest
+              orgId={orgId}
+              categories={categories.map((c) => ({ id: c.id, nameEn: c.nameEn, nameAr: c.nameAr, nameBn: c.nameBn ?? null }))}
+              units={units.map((u) => ({ id: u.id, code: u.code }))}
+              onApply={applyPhotoSuggestion}
+            />
+          ) : null}
           <Field label={t('product.sku')} required error={errorFor('sku')}>
             {(p) => (
               <Input {...p} dir="ltr" className="font-mono uppercase" value={draft.sku} maxLength={40}
