@@ -28,6 +28,7 @@ export async function buildCsvLookups(catalog: CatalogRepository, orgId: string)
     categoryIdByName: new Map(categories.map((c) => [c.nameEn.trim().toLowerCase(), c.id])),
     brandIdByName: new Map(brands.map((b) => [b.name.trim().toLowerCase(), b.id])),
     existingBySku: new Map(products.map((p) => [p.sku, { id: p.id, rowVersion: p.rowVersion }])),
+    existingBarcodes: new Map(products.flatMap((p) => p.units.flatMap((u) => (u.barcode ? [[u.barcode, p.sku] as const] : [])))),
   };
   return { lookups, units, categories, brands, products };
 }

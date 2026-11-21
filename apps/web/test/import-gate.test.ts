@@ -20,8 +20,8 @@ describe('product import gate', () => {
     expect(importBlockReason(plan([row('create'), row('create')]))).toBeNull();
   });
 
-  it('allows a clean plan of updates', () => {
-    expect(importBlockReason(plan([row('update')]))).toBeNull();
+  it('allows a clean plan of updates once the overwrite is confirmed', () => {
+    expect(importBlockReason(plan([row('update')]), true)).toBeNull();
   });
 
   it('blocks a plan with even one invalid record, even when most rows are valid', () => {
@@ -43,5 +43,25 @@ describe('product import gate', () => {
   it('blocks when there is no plan yet, and when there is nothing to import', () => {
     expect(importBlockReason(null)).toBe('no_plan');
     expect(importBlockReason(plan([]))).toBe('nothing');
+  });
+});
+
+describe('overwrite of existing products', () => {
+  it('blocks a plan that would update existing products until the overwrite is confirmed', () => {
+    const p = plan([row('create'), row('update')]);
+    expect(importBlockReason(p)).toBe('overwrite_unconfirmed');
+    expect(importBlockReason(p, false)).toBe('overwrite_unconfirmed');
+  });
+
+  it('allows the same plan once the overwrite is explicitly confirmed', () => {
+    expect(importBlockReason(plan([row('create'), row('update')]), true)).toBeNull();
+  });
+
+  it('a create-only plan never needs the overwrite confirmation', () => {
+    expect(importBlockReason(plan([row('create')]), false)).toBeNull();
+  });
+
+  it('invalid rows still block even when the overwrite is confirmed', () => {
+    expect(importBlockReason(plan([row('update'), row('invalid')]), true)).toBe('invalid');
   });
 });

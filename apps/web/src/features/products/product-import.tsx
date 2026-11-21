@@ -32,6 +32,7 @@ export function ProductImport() {
   const [progress, setProgress] = React.useState<{ done: number; total: number } | null>(null);
   const [outcomes, setOutcomes] = React.useState<ImportOutcome[] | null>(null);
   const [error, setError] = React.useState<unknown>(null);
+  const [confirmOverwrite, setConfirmOverwrite] = React.useState(false);
 
   const issueText = (code: string) => tMaybe(`issues.${code}`) ?? tMaybe(`errors.${code}`) ?? code;
 
@@ -39,6 +40,7 @@ export function ProductImport() {
     setError(null);
     setOutcomes(null);
     setPlan(null);
+    setConfirmOverwrite(false);
     if (!file) return;
     setFileName(file.name);
     if (file.size > MAX_BYTES) {
@@ -56,7 +58,7 @@ export function ProductImport() {
   }
 
   async function run() {
-    if (importBlockReason(plan) !== null) return; // belt and braces: never run a blocked plan
+    if (importBlockReason(plan, confirmOverwrite) !== null) return; // belt and braces: never run a blocked plan
     if (!plan) return;
     setBusy('apply');
     setError(null);
@@ -86,7 +88,7 @@ export function ProductImport() {
   }
 
   // Fail closed: any invalid row blocks the whole import (see import-gate.ts).
-  const block = importBlockReason(plan);
+  const block = importBlockReason(plan, confirmOverwrite);
   const runnable = block === null;
 
   return (
@@ -128,6 +130,13 @@ export function ProductImport() {
             <Badge variant="success">{t('import.count_create', { count: fmt.number(plan.counts.create) })}</Badge>
             <Badge variant="secondary">{t('import.count_update', { count: fmt.number(plan.counts.update) })}</Badge>
             <Badge variant={plan.counts.invalid > 0 ? 'destructive' : 'outline'}>{t('import.count_invalid', { count: fmt.number(plan.counts.invalid) })}</Badge>
+            {plan.counts.update > 0 ? (
+              <label className="flex min-h-11 items-center gap-2 text-sm">
+                <input type="checkbox" className="size-4" checked={confirmOverwrite} onChange={(e) => setConfirmOverwrite(e.target.checked)} />
+                {t('import.confirm_overwrite', { count: fmt.number(plan.counts.update) })}
+              </label>
+            ) : null}
+            {block === 'overwrite_unconfirmed' ? <p className="text-sm text-destructive">{t('import.block_overwrite')}</p> : null}
             <Button onClick={() => void run()} disabled={!runnable || busy !== null}>
               {busy === 'apply' ? t('common.saving') : t('import.run', { count: fmt.number(plan.counts.create + plan.counts.update) })}
             </Button>
@@ -174,6 +183,11 @@ export function ProductImport() {
         <Card>
           <CardHeader><CardTitle className="text-base">{t('import.results')}</CardTitle></CardHeader>
           <CardContent>
+            <p className="mb-3 flex flex-wrap gap-3 text-sm">
+              <Badge variant="success">{t('import.summary_created', { count: fmt.number(outcomes.filter((o) => o.status === 'created').length) })}</Badge>
+              <Badge variant="secondary">{t('import.summary_updated', { count: fmt.number(outcomes.filter((o) => o.status === 'updated').length) })}</Badge>
+              <Badge variant={outcomes.some((o) => o.status === 'failed') ? 'destructive' : 'outline'}>{t('import.summary_failed', { count: fmt.number(outcomes.filter((o) => o.status === 'failed').length) })}</Badge>
+            </p>
             <ul className="flex flex-col gap-1 text-sm">
               {outcomes.map((o, i) => (
                 <li key={i} className={o.status === 'failed' ? 'text-destructive' : ''}>
