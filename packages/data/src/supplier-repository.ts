@@ -131,32 +131,25 @@ export function mapSupplier(r: RawSupplier): Supplier {
   return s;
 }
 
-/** The payload the save function reads (snake_case keys, as the SQL expects). */
+/**
+ * The payload the save function reads (snake_case keys). A field the caller did not set is left OUT,
+ * so the server keeps its stored value; only an explicit null or empty string clears a field.
+ */
 export function supplierPayload(input: SupplierInput): Record<string, unknown> {
-  return {
-    ...(input.id ? { id: input.id } : {}),
-    supplier_code: input.supplierCode ?? null,
-    name_en: input.nameEn,
-    name_ar: input.nameAr,
-    name_bn: input.nameBn ?? null,
-    contact_person: input.contactPerson ?? null,
-    mobile: input.mobile ?? null,
-    whatsapp: input.whatsapp ?? null,
-    email: input.email ?? null,
-    address: input.address ?? null,
-    city: input.city ?? null,
-    country_code: input.countryCode ?? null,
-    vat_number: input.vatNumber ?? null,
-    cr_number: input.crNumber ?? null,
-    opening_balance: input.openingBalance ?? null,
-    credit_limit: input.creditLimit ?? null,
-    payment_terms_days: input.paymentTermsDays ?? null,
-    bank_name: input.bankName ?? null,
-    bank_account_name: input.bankAccountName ?? null,
-    iban: input.iban ?? null,
-    notes: input.notes ?? null,
-    is_active: input.isActive ?? true,
-  };
+  const map: Array<[keyof SupplierInput, string]> = [
+    ['supplierCode', 'supplier_code'], ['nameEn', 'name_en'], ['nameAr', 'name_ar'], ['nameBn', 'name_bn'],
+    ['contactPerson', 'contact_person'], ['mobile', 'mobile'], ['whatsapp', 'whatsapp'], ['email', 'email'],
+    ['address', 'address'], ['city', 'city'], ['countryCode', 'country_code'], ['vatNumber', 'vat_number'],
+    ['crNumber', 'cr_number'], ['openingBalance', 'opening_balance'], ['creditLimit', 'credit_limit'],
+    ['paymentTermsDays', 'payment_terms_days'], ['bankName', 'bank_name'], ['bankAccountName', 'bank_account_name'],
+    ['iban', 'iban'], ['notes', 'notes'], ['isActive', 'is_active'],
+  ];
+  const payload: Record<string, unknown> = {};
+  if (input.id) payload.id = input.id;
+  for (const [key, column] of map) {
+    if (input[key] !== undefined) payload[column] = input[key];
+  }
+  return payload;
 }
 
 export function createSupabaseSupplierRepository(db: DbClient): SupplierRepository {

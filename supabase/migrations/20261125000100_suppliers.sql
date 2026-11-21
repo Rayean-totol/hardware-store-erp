@@ -134,8 +134,42 @@ alter table public.suppliers enable row level security;
 -- 4. Helpers (not callable by clients)
 -- -----------------------------------------------------------------------------
 
+-- IBAN check digits (ISO 13616 mod-97). Returns false for anything that is not a well-formed IBAN.
+create or replace function app.iban_checksum_valid(p_iban text)
+returns boolean
+language plpgsql
+immutable
+set search_path = ''
+as $$
+declare
+  v_rotated text;
+  v_digits  text := '';
+  v_rem     integer := 0;
+  v_char    text;
+  i         integer;
+begin
+  if p_iban is null or p_iban !~ '^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$' then
+    return false;
+  end if;
+  v_rotated := substr(p_iban, 5) || substr(p_iban, 1, 4);
+  for i in 1..length(v_rotated) loop
+    v_char := substr(v_rotated, i, 1);
+    if v_char ~ '[A-Z]' then
+      v_digits := v_digits || (ascii(v_char) - 55)::text;
+    else
+      v_digits := v_digits || v_char;
+    end if;
+  end loop;
+  for i in 1..length(v_digits) loop
+    v_rem := (v_rem * 10 + substr(v_digits, i, 1)::integer) % 97;
+  end loop;
+  return v_rem = 1;
+end;
+$$;
+
 -- Validation: returns the first problem with a supplier payload, or null when it is valid.
--- Codes are translated by the app (errors.supplier.*). Inputs are trimmed by the caller.
+-- Codes are translated by the app (errors.supplier.*, errors.validation). The function never
+-- raises a cast error: every input is checked as text before it is cast.
 create or replace function app.supplier_issue(p jsonb)
 returns text
 language plpgsql
@@ -143,44 +177,56 @@ immutable
 set search_path = ''
 as $$
 declare
-  v_code text := upper(btrim(coalesce(p->>'supplier_code', '')));
-  v_iban text := upper(regexp_replace(coalesce(p->>'iban', ''), '\s', '', 'g'));
-  v_amount numeric;
-  v_terms text := nullif(btrim(coalesce(p->>'payment_terms_days', '')), '');
+  v_code     text := upper(btrim(coalesce(p->>'supplier_code', '')));
+  v_iban     text := upper(regexp_replace(coalesce(p->>'iban', ''), '\s', '', 'g'));
+  v_terms    text := nullif(btrim(coalesce(p->>'payment_terms_days', '')), '');
+  v_country  text := nullif(upper(btrim(coalesce(p->>'country_code', ''))), '');
+  v_currency text := nullif(upper(btrim(coalesce(p->>'default_currency', ''))), '');
+  v_opening  text := nullif(btrim(coalesce(p->>'opening_balance', '')), '');
+  v_credit   text := nullif(btrim(coalesce(p->>'credit_limit', '')), '');
 begin
+  if p is null or jsonb_typeof(p) <> 'object' then return 'validation'; end if;
+
+  -- Names
   if length(btrim(coalesce(p->>'name_en', ''))) = 0 or length(btrim(p->>'name_en')) > 200 then return 'supplier.name_required'; end if;
   if length(btrim(coalesce(p->>'name_ar', ''))) = 0 or length(btrim(p->>'name_ar')) > 200 then return 'supplier.name_required'; end if;
+  if nullif(btrim(coalesce(p->>'name_bn', '')), '') is not null and length(btrim(p->>'name_bn')) > 200 then return 'validation'; end if;
+
+  -- Code
   if v_code <> '' and v_code !~ '^[A-Z0-9][A-Z0-9._/-]{0,39}$' then return 'supplier.code_invalid'; end if;
-  if nullif(btrim(coalesce(p->>'mobile', '')), '') is not null
-     and btrim(p->>'mobile') !~ '^\+?[0-9][0-9 ()-]{6,18}[0-9]$' then return 'supplier.phone_invalid'; end if;
-  if nullif(btrim(coalesce(p->>'whatsapp', '')), '') is not null
-     and btrim(p->>'whatsapp') !~ '^\+?[0-9][0-9 ()-]{6,18}[0-9]$' then return 'supplier.phone_invalid'; end if;
-  if nullif(btrim(coalesce(p->>'email', '')), '') is not null then
-    if length(btrim(p->>'email')) > 254 or btrim(p->>'email') !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
-      return 'supplier.email_invalid';
-    end if;
+
+  -- Contact
+  if nullif(btrim(coalesce(p->>'mobile', '')), '') is not null and btrim(p->>'mobile') !~ '^\+?[0-9][0-9 ()-]{6,18}[0-9]$' then return 'supplier.phone_invalid'; end if;
+  if nullif(btrim(coalesce(p->>'whatsapp', '')), '') is not null and btrim(p->>'whatsapp') !~ '^\+?[0-9][0-9 ()-]{6,18}[0-9]$' then return 'supplier.phone_invalid'; end if;
+  if nullif(btrim(coalesce(p->>'email', '')), '') is not null
+     and (length(btrim(p->>'email')) > 254 or btrim(p->>'email') !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$') then
+    return 'supplier.email_invalid';
   end if;
-  if nullif(btrim(coalesce(p->>'vat_number', '')), '') is not null
-     and btrim(p->>'vat_number') !~ '^3[0-9]{13}3$' then return 'supplier.vat_invalid'; end if;
-  if nullif(btrim(coalesce(p->>'cr_number', '')), '') is not null
-     and btrim(p->>'cr_number') !~ '^[0-9]{10}$' then return 'supplier.cr_invalid'; end if;
-  if v_iban <> '' and v_iban !~ '^SA[0-9]{22}$' then return 'supplier.iban_invalid'; end if;
-  if coalesce(nullif(upper(btrim(p->>'default_currency')), ''), 'SAR') <> 'SAR' then return 'supplier.currency_invalid'; end if;
-  if coalesce(nullif(upper(btrim(p->>'country_code')), ''), 'SA') !~ '^[A-Z]{2}$' then return 'supplier.country_invalid'; end if;
-  if v_terms is not null and v_terms !~ '^[0-9]{1,3}$' then return 'supplier.payment_terms_invalid'; end if;
-  if v_terms is not null and v_terms::int > 365 then return 'supplier.payment_terms_invalid'; end if;
+  if nullif(btrim(coalesce(p->>'contact_person', '')), '') is not null and length(btrim(p->>'contact_person')) > 120 then return 'validation'; end if;
+  if nullif(btrim(coalesce(p->>'address', '')), '') is not null and length(btrim(p->>'address')) > 300 then return 'validation'; end if;
+  if nullif(btrim(coalesce(p->>'city', '')), '') is not null and length(btrim(p->>'city')) > 100 then return 'validation'; end if;
 
-  begin
-    v_amount := nullif(btrim(coalesce(p->>'opening_balance', '')), '')::numeric;
-  exception when others then return 'supplier.amount_invalid';
-  end;
-  if v_amount is not null and (v_amount < 0 or scale(v_amount) > 2) then return 'supplier.amount_invalid'; end if;
+  -- Tax and registration
+  if nullif(btrim(coalesce(p->>'vat_number', '')), '') is not null and btrim(p->>'vat_number') !~ '^3[0-9]{13}3$' then return 'supplier.vat_invalid'; end if;
+  if nullif(btrim(coalesce(p->>'cr_number', '')), '') is not null and btrim(p->>'cr_number') !~ '^[0-9]{10}$' then return 'supplier.cr_invalid'; end if;
 
-  begin
-    v_amount := nullif(btrim(coalesce(p->>'credit_limit', '')), '')::numeric;
-  exception when others then return 'supplier.amount_invalid';
-  end;
-  if v_amount is not null and (v_amount < 0 or scale(v_amount) > 2) then return 'supplier.amount_invalid'; end if;
+  -- Money: plain decimal text, at most 16 whole digits and 2 decimals (fits numeric(18,2)).
+  if v_opening is not null and v_opening !~ '^[0-9]{1,16}(\.[0-9]{1,2})?$' then return 'supplier.amount_invalid'; end if;
+  if v_credit is not null and v_credit !~ '^[0-9]{1,16}(\.[0-9]{1,2})?$' then return 'supplier.amount_invalid'; end if;
+
+  -- Terms and currency
+  if v_terms is not null and (v_terms !~ '^[0-9]{1,3}$' or v_terms::integer > 365) then return 'supplier.payment_terms_invalid'; end if;
+  if coalesce(v_currency, 'SAR') <> 'SAR' then return 'supplier.currency_invalid'; end if;
+  if coalesce(v_country, 'SA') !~ '^[A-Z]{2}$' then return 'supplier.country_invalid'; end if;
+
+  -- Bank: Saudi IBAN format and check digits
+  if v_iban <> '' and (v_iban !~ '^SA[0-9]{22}$' or not app.iban_checksum_valid(v_iban)) then return 'supplier.iban_invalid'; end if;
+  if nullif(btrim(coalesce(p->>'bank_name', '')), '') is not null and length(btrim(p->>'bank_name')) > 120 then return 'validation'; end if;
+  if nullif(btrim(coalesce(p->>'bank_account_name', '')), '') is not null and length(btrim(p->>'bank_account_name')) > 120 then return 'validation'; end if;
+
+  -- Other
+  if nullif(btrim(coalesce(p->>'notes', '')), '') is not null and length(btrim(p->>'notes')) > 2000 then return 'validation'; end if;
+  if coalesce(jsonb_typeof(p->'is_active'), 'null') not in ('boolean', 'null') then return 'validation'; end if;
 
   return null;
 end;
@@ -316,6 +362,10 @@ $$;
 -- -----------------------------------------------------------------------------
 -- 7. save_supplier: create or update, with validation, uniqueness and optimistic locking
 -- -----------------------------------------------------------------------------
+-- Create: every field is taken from the payload (absent optional fields are empty).
+-- Update: the payload is MERGED onto the stored row. Keys that are not sent keep their stored
+-- values; a key sent as null or as an empty string clears that field on purpose.
+-- The version (p_expected_version) must match the stored row_version, or nothing changes.
 create or replace function public.save_supplier(
   p_org_id           uuid,
   p_supplier         jsonb,
@@ -327,20 +377,22 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_id       uuid := nullif(btrim(coalesce(p_supplier->>'id', '')), '')::uuid;
+  v_id       uuid;
   v_existing public.suppliers%rowtype;
   v_row      public.suppliers%rowtype;
+  v_src      jsonb;
   v_issue    text;
   v_next     bigint;
   v_no       text;
-  v_code     text := upper(nullif(btrim(coalesce(p_supplier->>'supplier_code', '')), ''));
-  v_vat      text := nullif(btrim(coalesce(p_supplier->>'vat_number', '')), '');
-  v_cr       text := nullif(btrim(coalesce(p_supplier->>'cr_number', '')), '');
-  v_iban     text := nullif(upper(regexp_replace(coalesce(p_supplier->>'iban', ''), '\s', '', 'g')), '');
+  v_code     text;
+  v_vat      text;
+  v_cr       text;
+  v_iban     text;
+  v_email    text;
   v_opening  numeric;
   v_credit   numeric;
   v_terms    integer;
-  v_email    text := nullif(btrim(coalesce(p_supplier->>'email', '')), '');
+  v_active   boolean;
 begin
   if not app.is_org_member(p_org_id) then
     perform app.fail('forbidden', 'membership');
@@ -348,26 +400,58 @@ begin
   if not app.has_permission(p_org_id, 'suppliers.manage') then
     perform app.fail('forbidden', 'suppliers.manage');
   end if;
+  if p_supplier is null or jsonb_typeof(p_supplier) <> 'object' then
+    perform app.fail('validation', 'supplier');
+  end if;
   -- A payload may not name another organisation.
   if p_supplier ? 'org_id' and (p_supplier->>'org_id') is distinct from p_org_id::text then
     perform app.fail('forbidden', 'org_id');
   end if;
 
-  v_issue := app.supplier_issue(p_supplier);
+  -- The id, when present, must be a uuid (checked as text, so no cast error can escape).
+  if nullif(btrim(coalesce(p_supplier->>'id', '')), '') is not null then
+    if btrim(p_supplier->>'id') !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+      perform app.fail('validation', 'id');
+    end if;
+    v_id := btrim(p_supplier->>'id')::uuid;
+  end if;
+
+  if v_id is null then
+    -- Create. A version without an id is refused, never treated as a create.
+    if p_expected_version is not null then
+      perform app.fail('validation', 'id');
+    end if;
+    v_src := p_supplier;
+  else
+    select * into v_existing from public.suppliers where id = v_id and org_id = p_org_id for update;
+    if not found then
+      perform app.fail('supplier.not_found');
+    end if;
+    if p_expected_version is null or p_expected_version <> v_existing.row_version then
+      perform app.fail('concurrency_conflict', v_existing.row_version::text);
+    end if;
+    -- Partial update: merge the stored row with the keys that were sent. Bookkeeping keys are never taken from the client.
+    v_src := to_jsonb(v_existing) || (p_supplier - array['id', 'org_id', 'supplier_no', 'row_version', 'created_at', 'updated_at', 'created_by', 'updated_by']);
+  end if;
+
+  v_issue := app.supplier_issue(v_src);
   if v_issue is not null then
     perform app.fail(v_issue);
   end if;
-  -- An edit names the supplier and its version. A version without an id is refused, never a silent create.
-  if v_id is null and p_expected_version is not null then
-    perform app.fail('validation', 'id');
-  end if;
-  -- Validated above, so these casts cannot fail.
-  v_opening := coalesce(nullif(btrim(coalesce(p_supplier->>'opening_balance', '')), '')::numeric, 0);
-  v_credit := nullif(btrim(coalesce(p_supplier->>'credit_limit', '')), '')::numeric;
-  v_terms := nullif(btrim(coalesce(p_supplier->>'payment_terms_days', '')), '')::integer;
+
+  -- Normalised values (the same rules the validator checked).
+  v_code    := nullif(upper(btrim(coalesce(v_src->>'supplier_code', ''))), '');
+  v_vat     := nullif(btrim(coalesce(v_src->>'vat_number', '')), '');
+  v_cr      := nullif(btrim(coalesce(v_src->>'cr_number', '')), '');
+  v_email   := nullif(btrim(coalesce(v_src->>'email', '')), '');
+  v_iban    := nullif(upper(regexp_replace(coalesce(v_src->>'iban', ''), '\s', '', 'g')), '');
+  v_opening := coalesce(nullif(btrim(coalesce(v_src->>'opening_balance', '')), '')::numeric, 0);
+  v_credit  := nullif(btrim(coalesce(v_src->>'credit_limit', '')), '')::numeric;
+  v_terms   := nullif(btrim(coalesce(v_src->>'payment_terms_days', '')), '')::integer;
+  v_active  := coalesce((v_src->>'is_active')::boolean, true);
 
   if v_id is null then
-    -- Create. The counter row is locked, so numbers are gap-free per organisation and never repeat.
+    -- The counter row is locked, so numbers are gap-free per organisation and never repeat.
     insert into public.supplier_counters (org_id, last_value) values (p_org_id, 1)
     on conflict (org_id) do update set last_value = public.supplier_counters.last_value + 1
     returning last_value into v_next;
@@ -380,15 +464,14 @@ begin
         default_currency, bank_name, bank_account_name, iban, notes, is_active)
       values (
         p_org_id, v_no, coalesce(v_code, v_no),
-        btrim(p_supplier->>'name_en'), btrim(p_supplier->>'name_ar'), nullif(btrim(coalesce(p_supplier->>'name_bn', '')), ''),
-        nullif(btrim(coalesce(p_supplier->>'contact_person', '')), ''),
-        nullif(btrim(coalesce(p_supplier->>'mobile', '')), ''), nullif(btrim(coalesce(p_supplier->>'whatsapp', '')), ''),
-        v_email, nullif(btrim(coalesce(p_supplier->>'address', '')), ''), nullif(btrim(coalesce(p_supplier->>'city', '')), ''),
-        coalesce(nullif(upper(btrim(coalesce(p_supplier->>'country_code', ''))), ''), 'SA'),
+        btrim(v_src->>'name_en'), btrim(v_src->>'name_ar'), nullif(btrim(coalesce(v_src->>'name_bn', '')), ''),
+        nullif(btrim(coalesce(v_src->>'contact_person', '')), ''),
+        nullif(btrim(coalesce(v_src->>'mobile', '')), ''), nullif(btrim(coalesce(v_src->>'whatsapp', '')), ''),
+        v_email, nullif(btrim(coalesce(v_src->>'address', '')), ''), nullif(btrim(coalesce(v_src->>'city', '')), ''),
+        coalesce(nullif(upper(btrim(coalesce(v_src->>'country_code', ''))), ''), 'SA'),
         v_vat, v_cr, v_opening, v_credit, v_terms, 'SAR',
-        nullif(btrim(coalesce(p_supplier->>'bank_name', '')), ''), nullif(btrim(coalesce(p_supplier->>'bank_account_name', '')), ''),
-        v_iban, nullif(btrim(coalesce(p_supplier->>'notes', '')), ''),
-        coalesce((p_supplier->>'is_active')::boolean, true))
+        nullif(btrim(coalesce(v_src->>'bank_name', '')), ''), nullif(btrim(coalesce(v_src->>'bank_account_name', '')), ''),
+        v_iban, nullif(btrim(coalesce(v_src->>'notes', '')), ''), v_active)
       returning * into v_row;
     exception when unique_violation then
       if sqlerrm like '%suppliers_code_uq%' then perform app.fail('supplier.code_taken', v_code);
@@ -396,37 +479,30 @@ begin
       else raise; end if;
     end;
   else
-    select * into v_existing from public.suppliers where id = v_id and org_id = p_org_id for update;
-    if not found then
-      perform app.fail('supplier.not_found');
-    end if;
-    if p_expected_version is null or p_expected_version <> v_existing.row_version then
-      perform app.fail('concurrency_conflict', v_existing.row_version::text);
-    end if;
-
     begin
       update public.suppliers set
-        supplier_code = coalesce(v_code, v_existing.supplier_no),
-        name_en = btrim(p_supplier->>'name_en'),
-        name_ar = btrim(p_supplier->>'name_ar'),
-        name_bn = nullif(btrim(coalesce(p_supplier->>'name_bn', '')), ''),
-        contact_person = nullif(btrim(coalesce(p_supplier->>'contact_person', '')), ''),
-        mobile = nullif(btrim(coalesce(p_supplier->>'mobile', '')), ''),
-        whatsapp = nullif(btrim(coalesce(p_supplier->>'whatsapp', '')), ''),
-        email = v_email,
-        address = nullif(btrim(coalesce(p_supplier->>'address', '')), ''),
-        city = nullif(btrim(coalesce(p_supplier->>'city', '')), ''),
-        country_code = coalesce(nullif(upper(btrim(coalesce(p_supplier->>'country_code', ''))), ''), 'SA'),
-        vat_number = v_vat,
-        cr_number = v_cr,
-        opening_balance = v_opening,
-        credit_limit = v_credit,
+        -- An empty code means "no code": the supplier number is used, as on creation.
+        supplier_code      = coalesce(v_code, v_existing.supplier_no),
+        name_en            = btrim(v_src->>'name_en'),
+        name_ar            = btrim(v_src->>'name_ar'),
+        name_bn            = nullif(btrim(coalesce(v_src->>'name_bn', '')), ''),
+        contact_person     = nullif(btrim(coalesce(v_src->>'contact_person', '')), ''),
+        mobile             = nullif(btrim(coalesce(v_src->>'mobile', '')), ''),
+        whatsapp           = nullif(btrim(coalesce(v_src->>'whatsapp', '')), ''),
+        email              = v_email,
+        address            = nullif(btrim(coalesce(v_src->>'address', '')), ''),
+        city               = nullif(btrim(coalesce(v_src->>'city', '')), ''),
+        country_code       = coalesce(nullif(upper(btrim(coalesce(v_src->>'country_code', ''))), ''), 'SA'),
+        vat_number         = v_vat,
+        cr_number          = v_cr,
+        opening_balance    = v_opening,
+        credit_limit       = v_credit,
         payment_terms_days = v_terms,
-        bank_name = nullif(btrim(coalesce(p_supplier->>'bank_name', '')), ''),
-        bank_account_name = nullif(btrim(coalesce(p_supplier->>'bank_account_name', '')), ''),
-        iban = v_iban,
-        notes = nullif(btrim(coalesce(p_supplier->>'notes', '')), ''),
-        is_active = coalesce((p_supplier->>'is_active')::boolean, v_existing.is_active)
+        bank_name          = nullif(btrim(coalesce(v_src->>'bank_name', '')), ''),
+        bank_account_name  = nullif(btrim(coalesce(v_src->>'bank_account_name', '')), ''),
+        iban               = v_iban,
+        notes              = nullif(btrim(coalesce(v_src->>'notes', '')), ''),
+        is_active          = v_active
       where id = v_id and org_id = p_org_id
       returning * into v_row;
     exception when unique_violation then
@@ -445,6 +521,7 @@ $$;
 -- -----------------------------------------------------------------------------
 revoke all on public.suppliers, public.supplier_counters from public, anon, authenticated;
 
+revoke all on function app.iban_checksum_valid(text) from public, anon, authenticated;
 revoke all on function app.supplier_issue(jsonb) from public, anon, authenticated;
 revoke all on function app.supplier_json(public.suppliers, boolean) from public, anon, authenticated;
 
@@ -458,4 +535,4 @@ grant execute on function public.save_supplier(uuid, jsonb, bigint) to authentic
 notify pgrst, 'reload schema';
 
 -- Version marker (confirm with obj_description on public.suppliers)
-comment on table public.suppliers is 'Phase 4A supplier management, migration 20261125000100.';
+comment on table public.suppliers is 'Phase 4A supplier management, migration 20261125000100 (v2: partial-update merge, amount and IBAN checksum validation).';

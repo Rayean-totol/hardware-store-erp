@@ -65,7 +65,7 @@ export function supplierIssue(d: SupplierDraft): SupplierIssue | null {
   if (!blank(d.vatNumber) && !VAT_PATTERN.test(d.vatNumber!.trim())) return 'supplier.vat_invalid';
   if (!blank(d.crNumber) && !CR_PATTERN.test(d.crNumber!.trim())) return 'supplier.cr_invalid';
   const iban = (d.iban ?? '').replace(/\s/g, '').toUpperCase();
-  if (iban !== '' && !IBAN_PATTERN.test(iban)) return 'supplier.iban_invalid';
+  if (iban !== '' && (!IBAN_PATTERN.test(iban) || !ibanChecksumValid(iban))) return 'supplier.iban_invalid';
   if (!isValidMoney(d.openingBalance)) return 'supplier.amount_invalid';
   if (!isValidMoney(d.creditLimit)) return 'supplier.amount_invalid';
   const terms = (d.paymentTermsDays ?? '').trim();
@@ -77,12 +77,24 @@ export function supplierIssue(d: SupplierDraft): SupplierIssue | null {
   return null;
 }
 
-/** Blank is allowed (the field is optional). Otherwise: a non-negative amount with at most two decimals. */
+/** Blank is allowed (the field is optional). Otherwise: plain decimal text, at most 16 whole digits and 2 decimals. */
 function isValidMoney(value: string | null | undefined): boolean {
   const v = (value ?? '').trim();
   if (v === '') return true;
-  if (!/^[0-9]+(\.[0-9]{1,2})?$/.test(v)) return false;
-  return Number(v) >= 0;
+  return /^[0-9]{1,16}(\.[0-9]{1,2})?$/.test(v);
+}
+
+/** ISO 13616 mod-97 check of an IBAN (the same arithmetic as app.iban_checksum_valid). */
+export function ibanChecksumValid(iban: string): boolean {
+  if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]{11,30}$/.test(iban)) return false;
+  const rotated = iban.slice(4) + iban.slice(0, 4);
+  let digits = '';
+  for (const ch of rotated) {
+    digits += /[A-Z]/.test(ch) ? String(ch.charCodeAt(0) - 55) : ch;
+  }
+  let rem = 0;
+  for (const d of digits) rem = (rem * 10 + Number(d)) % 97;
+  return rem === 1;
 }
 
 /** Stock-keeping style code as the database stores it: trimmed and upper-cased. */

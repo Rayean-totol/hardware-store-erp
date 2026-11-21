@@ -254,3 +254,135 @@ describe('suppliers: direct access and audit', () => {
     });
   });
 });
+
+describe('suppliers: partial updates never clear what was not sent', () => {
+  it('a partial update changes only the keys sent; everything else survives, and the version moves by one', async () => {
+    await asOwner(async (sql) => {
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'KEEP-1', city: 'Riyadh', mobile: '0501234567' }))).rows[0].r as { id: string; row_version: number };
+      const r2 = (await save(sql, DEMO_ORG, { id: c.id, name_en: 'Renamed', name_ar: 'اسم جديد' }, c.row_version)).rows[0].r as { row_version: number };
+      expect(r2.row_version).toBe(c.row_version + 1);
+      const p = (await sql('select public.get_supplier($1, $2) as r', [DEMO_ORG, c.id])).rows[0].r;
+      expect(p).toMatchObject({
+        name_en: 'Renamed', name_ar: 'اسم جديد', supplier_code: 'KEEP-1', city: 'Riyadh', mobile: '0501234567',
+        vat_number: '300000000000003', cr_number: '1010123456', opening_balance: '1500.50', credit_limit: '20000.00',
+        iban: 'SA0380000000608010167519', bank_name: 'Al Rajhi', is_active: true, payment_terms_days: 30, row_version: c.row_version + 1,
+      });
+    });
+  });
+
+  it('an explicit null or an empty string clears that field on purpose', async () => {
+    await asOwner(async (sql) => {
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'CLR-1' }))).rows[0].r as { id: string; row_version: number };
+      await save(sql, DEMO_ORG, { id: c.id, city: null, mobile: '' }, c.row_version);
+      const p = (await sql('select public.get_supplier($1, $2) as r', [DEMO_ORG, c.id])).rows[0].r;
+      expect(p).not.toHaveProperty('city');
+      expect(p).not.toHaveProperty('mobile');
+      expect(p.supplier_code).toBe('CLR-1');
+    });
+  });
+
+  it('a blank code on edit becomes the supplier number, as on creation', async () => {
+    await asOwner(async (sql) => {
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'BLANK-1' }))).rows[0].r as { id: string; supplier_no: string; row_version: number };
+      await save(sql, DEMO_ORG, { id: c.id, supplier_code: '' }, c.row_version);
+      expect((await sql('select public.get_supplier($1, $2) as r', [DEMO_ORG, c.id])).rows[0].r.supplier_code).toBe(c.supplier_no);
+    });
+  });
+
+  it('a refused edit changes nothing and does not move the version', async () => {
+    await asOwner(async (sql) => {
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'REF-1' }))).rows[0].r as { id: string; row_version: number };
+      await refused(sql, () => save(sql, DEMO_ORG, { id: c.id, opening_balance: 'NaN' }, c.row_version), 'supplier.amount_invalid');
+      const p = (await sql('select public.get_supplier($1, $2) as r', [DEMO_ORG, c.id])).rows[0].r;
+      expect(p).toMatchObject({ opening_balance: '1500.50', row_version: c.row_version });
+    });
+  });
+
+  it('deactivating hides the supplier from the active list; reactivating restores it', async () => {
+    await asOwner(async (sql) => {
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'OFF-1', vat_number: null }))).rows[0].r as { id: string; row_version: number };
+      const off = (await save(sql, DEMO_ORG, { id: c.id, is_active: false }, c.row_version)).rows[0].r as { row_version: number };
+      const active = (await sql(`select public.list_suppliers($1, 'OFF-1', 'active', 50, 0) as r`, [DEMO_ORG])).rows[0].r;
+      expect(active.total).toBe(0);
+      const inactive = (await sql(`select public.list_suppliers($1, 'OFF-1', 'inactive', 50, 0) as r`, [DEMO_ORG])).rows[0].r;
+      expect(inactive.total).toBe(1);
+      await save(sql, DEMO_ORG, { id: c.id, is_active: true }, off.row_version);
+      expect((await sql(`select public.list_suppliers($1, 'OFF-1', 'active', 50, 0) as r`, [DEMO_ORG])).rows[0].r.total).toBe(1);
+    });
+  });
+});
+
+describe('suppliers: financial amounts, IBAN and input types', () => {
+  it.each([
+    ['NaN', 'NaN'], ['Infinity', 'Infinity'], ['minus infinity', '-Infinity'], ['exponent notation', '1e3'],
+    ['oversized', '99999999999999999999'], ['three decimals', '10.005'], ['negative', '-1'], ['letters', 'abc'], ['thousands separator', '1,000.00'],
+  ])('opening balance: %s is refused as an amount', async (_n, value) => {
+    await asOwner(async (sql) => {
+      await refused(sql, () => save(sql, DEMO_ORG, valid({ opening_balance: value, supplier_code: 'AMT-X', vat_number: null })), 'supplier.amount_invalid');
+    });
+  });
+
+  it('credit limit is held to the same rule', async () => {
+    await asOwner(async (sql) => {
+      await refused(sql, () => save(sql, DEMO_ORG, valid({ credit_limit: 'Infinity', supplier_code: 'AMT-Y', vat_number: null })), 'supplier.amount_invalid');
+    });
+  });
+
+  it('an IBAN with the right shape but wrong check digits is refused; the valid one is accepted', async () => {
+    await asOwner(async (sql) => {
+      await refused(sql, () => save(sql, DEMO_ORG, valid({ iban: 'SA0380000000608010167518', supplier_code: 'IB-1', vat_number: null })), 'supplier.iban_invalid');
+      await save(sql, DEMO_ORG, valid({ iban: 'SA0380000000608010167519', supplier_code: 'IB-2', vat_number: null }));
+    });
+  });
+
+  it('a non-boolean active flag, a malformed id and a non-object payload are refused with validation codes', async () => {
+    await asOwner(async (sql) => {
+      await refused(sql, () => save(sql, DEMO_ORG, valid({ is_active: 'yes', supplier_code: 'T-1', vat_number: null })), 'validation');
+      await refused(sql, () => save(sql, DEMO_ORG, { id: 'not-a-uuid', name_en: 'X', name_ar: 'س' }, 1), 'validation');
+      await refused(sql, () => sql('select public.save_supplier($1, $2::jsonb, null)', [DEMO_ORG, '[1,2]']), 'validation');
+    });
+  });
+});
+
+describe('suppliers: numbering and versions under refusals', () => {
+  it('a refused create does not consume a supplier number', async () => {
+    await asOwner(async (sql) => {
+      const first = (await save(sql, DEMO_ORG, valid({ supplier_code: 'NUM-A', vat_number: null }))).rows[0].r.supplier_no as string;
+      await refused(sql, () => save(sql, DEMO_ORG, valid({ supplier_code: 'NUM-A', vat_number: null })), 'supplier.code_taken');
+      const third = (await save(sql, DEMO_ORG, valid({ supplier_code: 'NUM-B', vat_number: null }))).rows[0].r.supplier_no as string;
+      expect(Number(third.slice(4)) - Number(first.slice(4))).toBe(1);
+    });
+  });
+
+  it('a new supplier starts at version 1, and each successful save adds exactly one', async () => {
+    await asOwner(async (sql) => {
+      const a = (await save(sql, DEMO_ORG, valid({ supplier_code: 'VER-1', vat_number: null }))).rows[0].r as { id: string; row_version: number };
+      expect(a.row_version).toBe(1);
+      const b = (await save(sql, DEMO_ORG, { id: a.id, city: 'Dammam' }, a.row_version)).rows[0].r as { row_version: number };
+      const c = (await save(sql, DEMO_ORG, { id: a.id, city: 'Khobar' }, b.row_version)).rows[0].r as { row_version: number };
+      expect([b.row_version, c.row_version]).toEqual([2, 3]);
+    });
+  });
+});
+
+describe('suppliers: roles and search', () => {
+  it('an admin, like the owner, can create and edit suppliers', async () => {
+    await asAdmin(async (sql) => {
+      await sql(`insert into public.memberships (org_id, user_id, role_id, all_branches)
+                 select $1, $2, r.id, true from public.roles r where r.code = 'admin' and r.is_system`, [DEMO_ORG, USERS.newcomer]);
+      await sql(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: USERS.newcomer, role: 'authenticated' })]);
+      const r = (await save(sql, DEMO_ORG, valid({ supplier_code: 'ADM-1', vat_number: null }))).rows[0].r as { id: string; row_version: number };
+      await save(sql, DEMO_ORG, { id: r.id, city: 'Tabuk' }, r.row_version);
+    });
+  });
+
+  it('search finds a supplier by its supplier number and by its VAT number', async () => {
+    await asOwner(async (sql) => {
+      const r = (await save(sql, DEMO_ORG, valid({ supplier_code: 'FIND-1', vat_number: '322222222222223' }))).rows[0].r as { supplier_no: string };
+      const byNo = (await sql(`select public.list_suppliers($1, $2, 'all', 50, 0) as r`, [DEMO_ORG, r.supplier_no])).rows[0].r;
+      expect(byNo.items.map((i: { supplier_code: string }) => i.supplier_code)).toContain('FIND-1');
+      const byVat = (await sql(`select public.list_suppliers($1, '322222222222223', 'all', 50, 0) as r`, [DEMO_ORG])).rows[0].r;
+      expect(byVat.items.map((i: { supplier_code: string }) => i.supplier_code)).toEqual(['FIND-1']);
+    });
+  });
+});

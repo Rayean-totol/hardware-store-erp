@@ -32,7 +32,7 @@ describe('supplier repository', () => {
     const result = await createSupabaseSupplierRepository(db).save('o1', { id: 's1', nameEn: 'Najd', nameAr: 'نجد', openingBalance: '5' }, 2);
     expect(rpc).toHaveBeenCalledWith('save_supplier', {
       p_org_id: 'o1',
-      p_supplier: expect.objectContaining({ id: 's1', name_en: 'Najd', opening_balance: '5', is_active: true }),
+      p_supplier: expect.objectContaining({ id: 's1', name_en: 'Najd', opening_balance: '5' }),
       p_expected_version: 2,
     });
     expect(result).toEqual({ id: 's1', supplierNo: 'SUP-000001', rowVersion: 3 });
@@ -40,6 +40,12 @@ describe('supplier repository', () => {
 
   it('omits the id for a new supplier so the server numbers it', () => {
     expect(supplierPayload({ nameEn: 'A', nameAr: 'ا' })).not.toHaveProperty('id');
+  });
+
+  it('sends only the fields the caller set, so unset fields are never cleared by accident', () => {
+    const payload = supplierPayload({ id: 's1', nameEn: 'Najd', nameAr: 'نجد' });
+    expect(payload).toEqual({ id: 's1', name_en: 'Najd', name_ar: 'نجد' });
+    expect(supplierPayload({ nameEn: 'A', nameAr: 'ا', city: null, mobile: '' })).toMatchObject({ city: null, mobile: '' });
   });
 
   it('surfaces a refusal from the server as a DataError with the code', async () => {
