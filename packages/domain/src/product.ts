@@ -28,6 +28,8 @@ export interface ProductDraft {
   reorderLevel?: string | null | undefined;
   /** Free text such as "1/2 inch" or "50 kg". undefined = unchanged; null or '' = clear. */
   sizeLabel?: string | null | undefined;
+  /** Shared code for sizes or versions of one item. undefined = unchanged; null or '' = clear. */
+  variantGroup?: string | null | undefined;
   units: ProductUnitDef[];
 }
 
@@ -59,6 +61,7 @@ const draftSchema = z.object({
   taxExemptionReasonCode: z.string().nullish(),
   reorderLevel: z.string().nullish(),
   sizeLabel: z.string().nullish(),
+  variantGroup: z.string().nullish(),
   units: z.array(
     z.object({
       unitId: uuid,
@@ -105,6 +108,7 @@ export function normalizeProductDraft(draft: ProductDraft): ProductDraft {
     reorderLevel: blank(draft.reorderLevel),
     // undefined stays undefined: an absent field means "leave the stored value alone".
     sizeLabel: draft.sizeLabel === undefined ? undefined : blank(draft.sizeLabel),
+    variantGroup: draft.variantGroup === undefined ? undefined : blank(draft.variantGroup),
     units: draft.units.map((u) => ({
       ...u,
       factor: u.factor.trim(),
@@ -129,6 +133,7 @@ export function validateProductDraft(input: ProductDraft, units: UnitCatalog): P
   const error = (path: string, code: string) => issues.push({ path, code, severity: 'error' });
   const warn = (path: string, code: string) => issues.push({ path, code, severity: 'warning' });
   if (draft.sizeLabel && draft.sizeLabel.length > 40) error('sizeLabel', 'size_too_long');
+  if (draft.variantGroup && draft.variantGroup.length > 40) error('variantGroup', 'variant_group_too_long');
 
   const parsed = draftSchema.safeParse(draft);
   if (!parsed.success) {

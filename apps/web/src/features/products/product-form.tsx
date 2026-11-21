@@ -69,6 +69,7 @@ function emptyDraft(orgId: string, units: Unit[], canEditPrices: boolean): Produ
     taxExemptionReasonCode: '',
     reorderLevel: '',
     sizeLabel: '',
+    variantGroup: '',
     units: pcs
       ? [{ unitId: pcs.id, factor: '1', isBase: true, barcode: '', salePrice: '', ...(canEditPrices ? { purchasePrice: '' } : {}), isSaleUnit: true, isPurchaseUnit: true }]
       : [],
@@ -93,6 +94,7 @@ function draftFromProduct(p: Product, unitCosts: Record<string, string> | undefi
     taxExemptionReasonCode: p.taxExemptionReasonCode ?? '',
     reorderLevel: p.reorderLevel ? String(Number(p.reorderLevel)) : '',
     sizeLabel: p.sizeLabel ?? '',
+    variantGroup: p.variantGroup ?? '',
     units: p.units.map((u) => ({
       unitId: u.unitId,
       // DB returns numeric(18,6) as "200.000000"; show "200"
@@ -306,6 +308,9 @@ export function ProductForm(props: ProductFormProps) {
           </Field>
           <Field label={t('product.size')} optionalLabel={t('common.optional')} error={errorFor('sizeLabel')} hint={t('product.size_hint')}>
             {(p) => <Input {...p} maxLength={40} value={draft.sizeLabel ?? ''} onChange={(e) => update({ sizeLabel: e.target.value })} />}
+          </Field>
+          <Field label={t('product.variant_group')} optionalLabel={t('common.optional')} error={errorFor('variantGroup')} hint={t('product.variant_group_hint')}>
+            {(p) => <Input {...p} maxLength={40} dir="ltr" value={draft.variantGroup ?? ''} onChange={(e) => update({ variantGroup: e.target.value })} />}
           </Field>
           <Field label={t('product.description')} optionalLabel={t('common.optional')} className="md:col-span-2" error={errorFor('description')}>
             {(p) => <Textarea {...p} value={draft.description ?? ''} maxLength={2000} onChange={(e) => update({ description: e.target.value })} />}

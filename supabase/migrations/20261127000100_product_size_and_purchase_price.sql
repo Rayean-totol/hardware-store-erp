@@ -2,6 +2,7 @@
 -- Product size and purchase price (additive). Changes no existing row or meaning.
 -- =============================================================================
 -- 1. products.size_label: free text such as "1/2 inch", "50 kg" or "12 mm" (nullable, max 40).
+--    products.variant_group: shared code for the sizes or versions of one item (nullable, max 40).
 -- 2. public.product_unit_costs: purchase price per product unit. Financial, so it is readable and
 --    writable only with catalog.price_write (row policies). Empty for every existing product.
 -- 3. save_product: takes size_label and unit purchase_price. A key that is ABSENT keeps the stored
@@ -11,6 +12,11 @@
 
 alter table public.products add column if not exists size_label text
   check (size_label is null or char_length(size_label) between 1 and 40);
+
+-- Variant group: the same code on products that are sizes or versions of one item (for example
+-- every size of one pipe). Free text, nullable, absent = unchanged, same rules as size_label.
+alter table public.products add column if not exists variant_group text
+  check (variant_group is null or char_length(variant_group) between 1 and 40);
 
 create table if not exists public.product_unit_costs (
   id             uuid primary key default gen_random_uuid(),
@@ -100,14 +106,14 @@ begin
       end if;
       insert into public.products (id, org_id, sku, name_en, name_ar, name_bn, description,
         category_id, brand_id, product_type, base_unit_id, tax_category,
-        tax_exemption_reason_code, reorder_level, size_label)
+        tax_exemption_reason_code, reorder_level, size_label, variant_group)
       values (v_id, v_org, upper(btrim(p_product->>'sku')), btrim(p_product->>'name_en'),
         btrim(p_product->>'name_ar'), nullif(btrim(p_product->>'name_bn'), ''),
         nullif(btrim(p_product->>'description'), ''),
         nullif(p_product->>'category_id', '')::uuid, nullif(p_product->>'brand_id', '')::uuid,
         coalesce(p_product->>'product_type', 'stock'), v_base_unit,
         coalesce(p_product->>'tax_category', 'S'), nullif(p_product->>'tax_exemption_reason_code', ''),
-        nullif(p_product->>'reorder_level', '')::numeric, nullif(btrim(p_product->>'size_label'), ''));
+        nullif(p_product->>'reorder_level', '')::numeric, nullif(btrim(p_product->>'size_label'), ''), nullif(btrim(p_product->>'variant_group'), ''));
     else
       if v_existing.org_id <> v_org then
         perform app.fail('not_found');
@@ -129,7 +135,8 @@ begin
         tax_exemption_reason_code = nullif(p_product->>'tax_exemption_reason_code', ''),
         reorder_level = nullif(p_product->>'reorder_level', '')::numeric,
         -- Absent key: keep the stored size (older callers, the CSV import, do not send it).
-        size_label = case when p_product ? 'size_label' then nullif(btrim(p_product->>'size_label'), '') else size_label end
+        size_label = case when p_product ? 'size_label' then nullif(btrim(p_product->>'size_label'), '') else size_label end,
+        variant_group = case when p_product ? 'variant_group' then nullif(btrim(p_product->>'variant_group'), '') else variant_group end
       where id = v_id;
 
       -- Remove units no longer listed

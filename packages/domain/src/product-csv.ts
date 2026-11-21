@@ -185,6 +185,7 @@ export function planProductImport(text: string, orgId: string, lookups: ProductC
       reorderLevel: cell(first, 'reorder_level') || null,
       // Optional columns: read only when the file has them, and a blank cell leaves the stored value alone.
       sizeLabel: header.has('size') && cell(first, 'size') ? cell(first, 'size') : undefined,
+      variantGroup: header.has('variant_group') && cell(first, 'variant_group') ? cell(first, 'variant_group') : undefined,
       units: unitRows.map(({ e, unit }) => ({
         unitId: unit!.id,
         factor: cell(e.row, 'factor'),

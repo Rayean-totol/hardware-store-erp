@@ -109,3 +109,20 @@ describe('import of size and purchase price (optional CSV columns)', () => {
     expect(plan.products[0]!.draft!.units[0]!.purchasePrice).toBeUndefined();
   });
 });
+
+describe('variant group', () => {
+  it('trims and keeps a variant group; absent stays absent; empty clears', () => {
+    const kept = validateProductDraft(base({ variantGroup: ' PVC-PIPE ' }), catalog);
+    expect(kept.ok && kept.value.variantGroup).toBe('PVC-PIPE');
+    const absent = validateProductDraft(base(), catalog);
+    expect(absent.ok && absent.value.variantGroup).toBeUndefined();
+    const cleared = validateProductDraft(base({ variantGroup: ' ' }), catalog);
+    expect(cleared.ok && cleared.value.variantGroup).toBeNull();
+  });
+
+  it('refuses a variant group longer than 40 characters', () => {
+    const r = validateProductDraft(base({ variantGroup: 'x'.repeat(41) }), catalog);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.issues.map((i) => i.code)).toContain('variant_group_too_long');
+  });
+});

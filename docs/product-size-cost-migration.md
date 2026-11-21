@@ -9,9 +9,10 @@ File: `supabase/migrations/20261127000100_product_size_and_purchase_price.sql`
 | Object | Change | Existing data |
 |---|---|---|
 | `products.size_label` | new nullable text column (1 to 40 characters) | every existing product: NULL |
+| `products.variant_group` | new nullable text column (1 to 40 characters): shared code for sizes or versions of one item | every existing product: NULL |
 | `product_unit_costs` | new table: purchase price per product unit | empty for every existing product |
 | Row policies on `product_unit_costs` | readable and writable only with `catalog.price_write` | n/a |
-| `save_product` | accepts `size_label` and unit `purchase_price`; absent keys keep stored values | unchanged for existing callers |
+| `save_product` | accepts `size_label`, `variant_group` and unit `purchase_price`; absent keys keep stored values | unchanged for existing callers |
 
 Nothing is deleted, updated or renamed. Selling prices (`product_units.sale_price`) and their guard are not changed.
 

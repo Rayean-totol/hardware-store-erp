@@ -69,6 +69,7 @@ export function ProductCard({ product, displayName, categoryName, categoryNameEn
       <div className="min-w-0 flex-1 space-y-1">
         <div className="font-mono text-xs text-muted-foreground" dir="ltr">{product.sku}</div>
         <h3 className="line-clamp-2 break-words text-sm font-semibold leading-snug">{displayName}</h3>
+        {product.variantGroup ? <span className="w-fit rounded-full border px-2 py-0.5 text-[11px] text-muted-foreground">{t('product.variant_badge', { group: product.variantGroup })}</span> : null}
         <div className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
           {categoryName ? <span>{categoryName}</span> : null}
           {brandName ? <span>· {brandName}</span> : null}

@@ -78,6 +78,7 @@ export function toSaveProductParams(draft: ProductDraft, expectedVersion: number
       reorder_level: draft.reorderLevel ?? null,
       // Sent only when the caller set it: an absent field leaves the stored size unchanged.
       ...(draft.sizeLabel !== undefined ? { size_label: draft.sizeLabel ?? null } : {}),
+      ...(draft.variantGroup !== undefined ? { variant_group: draft.variantGroup ?? null } : {}),
     },
     p_units: draft.units.map((u) => ({
       unit_id: u.unitId,

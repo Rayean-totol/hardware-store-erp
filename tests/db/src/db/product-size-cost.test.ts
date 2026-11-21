@@ -117,3 +117,17 @@ describe('purchase price (cost)', () => {
     });
   });
 });
+
+describe('variant group', () => {
+  it('saves a variant group, keeps it when the key is absent, and clears it when empty', async () => {
+    await asUser(USERS.manager, async (sql) => {
+      const { pcs, unit } = await baseUnit(sql);
+      const first = await save(sql, { sku: SKU, name_en: 'Pipe 1/2', name_ar: 'ماسورة', base_unit_id: pcs, variant_group: 'PVC-PIPE' }, [unit]);
+      const kept = await save(sql, { id: first.id, sku: SKU, name_en: 'Pipe 1/2', name_ar: 'ماسورة', base_unit_id: pcs }, [unit], first.row_version);
+      expect((await sql('select variant_group from public.products where id = $1', [first.id])).rows[0].variant_group).toBe('PVC-PIPE');
+      await save(sql, { id: first.id, sku: SKU, name_en: 'Pipe 1/2', name_ar: 'ماسورة', base_unit_id: pcs, variant_group: '' }, [unit], kept.row_version);
+      expect((await sql('select variant_group from public.products where id = $1', [first.id])).rows[0].variant_group).toBeNull();
+    });
+  });
+});
+

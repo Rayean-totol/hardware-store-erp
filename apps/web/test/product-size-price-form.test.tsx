@@ -75,4 +75,13 @@ describe('ProductForm: size and purchase price', () => {
     await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
     expect((await screen.findAllByText(/above the selling price/i)).length).toBeGreaterThan(0);
   });
+
+  it('a variant group typed on the form is saved with the product', async () => {
+    const { onSave, user } = setup();
+    await fillRequired(user);
+    await user.type(screen.getByLabelText(/Variant group/), 'PVC-PIPE');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0]![0].variantGroup).toBe('PVC-PIPE');
+  });
 });
