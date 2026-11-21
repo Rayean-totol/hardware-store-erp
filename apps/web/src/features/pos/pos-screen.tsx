@@ -8,6 +8,7 @@ import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
 import { PageHeader } from '@/components/page-header';
 import { WriteHint } from '@/components/write-hint';
+import { BarcodeScanner } from '@/components/barcode-scanner';
 import { readPref, writePref } from '@/lib/storage';
 import { useConnection } from '@/providers/connection-provider';
 import { useI18n } from '@/providers/i18n-provider';
@@ -155,12 +156,9 @@ export function PosScreen() {
     searchRef.current?.focus();
   };
 
-  const onSearchKey = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    // USB and Bluetooth scanners type the code and press Enter. Ask the server directly, so a fast scan
-    // does not depend on the debounced list. An exact SKU or barcode adds one unit.
-    if (e.key !== 'Enter') return;
-    e.preventDefault();
-    const code = search.trim();
+  // Adds the product with this exact SKU or barcode. Used by the search field and by the camera scanner.
+  const addByCode = async (raw: string) => {
+    const code = raw.trim();
     if (!code) return;
     const page = await catalog.searchProducts({ orgId, search: code, includeArchived: false, limit: 5, offset: 0 });
     const exact = page.items.find((p) => p.sku.toLowerCase() === code.toLowerCase() || p.units.some((u) => u.barcode === code));
@@ -169,6 +167,14 @@ export function PosScreen() {
       add(pick);
       setSearch('');
     }
+  };
+
+  const onSearchKey = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    // USB and Bluetooth scanners type the code and press Enter. Ask the server directly, so a fast scan
+    // does not depend on the debounced list. An exact SKU or barcode adds one unit.
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    await addByCode(search);
   };
 
   const setQuantity = (key: string, value: string) => setLines((c) => patchLine(c, key, { quantity: value }));
@@ -273,6 +279,7 @@ export function PosScreen() {
                 autoFocus
               />
             </div>
+            <BarcodeScanner onScan={(code) => { setSearch(code); void addByCode(code); }} />
             <p className="text-xs text-muted-foreground">{t('pos.scan_hint')}</p>
             {products.error ? <ErrorAlert error={products.error} onRetry={() => void products.refetch()} /> : null}
             {products.isPending ? <Spinner label={t('common.loading')} /> : null}

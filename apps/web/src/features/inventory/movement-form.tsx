@@ -18,6 +18,7 @@ import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
 import { PageHeader } from '@/components/page-header';
 import { WriteHint } from '@/components/write-hint';
+import { BarcodeScanner } from '@/components/barcode-scanner';
 import { getDeviceId } from '@/lib/storage';
 import { useConnection } from '@/providers/connection-provider';
 import { useI18n } from '@/providers/i18n-provider';
@@ -260,6 +261,7 @@ export function MovementForm({ initialType }: { initialType: string | null }) {
                   <Button type="button" variant="outline" size="icon" aria-label={t('movement.lookup')} onClick={() => void lookup(scan)}>
                     <Search aria-hidden="true" />
                   </Button>
+                  <BarcodeScanner onScan={(code) => { setScan(code); void lookup(code); }} />
                 </div>
               )}
             </Field>
