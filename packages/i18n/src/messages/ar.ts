@@ -417,6 +417,7 @@ export const ar: Messages = {
   "products.bulk_images": "صور جماعية",
   "products.find_by_photo": "البحث بالصورة",
   "photo_suggest.title": "اقتراحات من الصورة",
+  "photo_suggest.button": "مسح صورة المنتج وتعبئة البيانات تلقائياً",
   "photo_suggest.hint": "التقط صورة للملصق أو المنتج. تتم القراءة على هذا الجهاز. راجع الاقتراحات قبل تطبيقها.",
   "photo_suggest.pick": "التقط صورة أو اختر صورة",
   "photo_suggest.reading": "جارٍ قراءة الملصق",

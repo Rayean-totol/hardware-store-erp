@@ -416,6 +416,7 @@ export const en = {
   "products.bulk_images": "Bulk photos",
   "products.find_by_photo": "Find by photo",
   "photo_suggest.title": "Photo suggestions",
+  "photo_suggest.button": "Scan Product Photo & Auto Fill",
   "photo_suggest.hint": "Take a photo of the label or product. Suggestions are read on this device. Review them before applying.",
   "photo_suggest.pick": "Take or choose photo",
   "photo_suggest.reading": "Reading label",

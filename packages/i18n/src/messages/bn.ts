@@ -417,6 +417,7 @@ export const bn: Messages = {
   "products.bulk_images": "একসাথে ছবি",
   "products.find_by_photo": "ছবি দিয়ে খুঁজুন",
   "photo_suggest.title": "ছবি থেকে পরামর্শ",
+  "photo_suggest.button": "পণ্যের ছবি স্ক্যান করে স্বয়ংক্রিয়ভাবে পূরণ করুন",
   "photo_suggest.hint": "লেবেল বা পণ্যের ছবি তুলুন। পরামর্শ এই ডিভাইসেই পড়া হয়। প্রয়োগ করার আগে যাচাই করুন।",
   "photo_suggest.pick": "ছবি তুলুন বা বেছে নিন",
   "photo_suggest.reading": "লেবেল পড়া হচ্ছে",

@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Input, NativeSelect, Spinner } from '@erp/ui';
+import { Alert, Button, Input, NativeSelect, Spinner } from '@erp/ui';
 import { Camera, Check } from 'lucide-react';
 import * as React from 'react';
 import { BarcodeScanner } from '@/components/barcode-scanner';
@@ -30,9 +30,9 @@ interface Props {
 type Status = 'idle' | 'reading' | 'ready' | 'error';
 
 /**
- * "Take a photo" for a new product. Reads the label on this device and proposes names, category and
- * unit, and warns when the photo looks like an existing product. Nothing is applied until the user
- * presses Apply, and nothing is saved from here: the normal form still validates and saves.
+ * "Scan Product Photo & Auto Fill" for a new product. It sits at the top of the General section. The
+ * photo is read on this device and the suggestions go into editable fields. Nothing is applied until
+ * the user presses Apply, and nothing is saved from here.
  */
 export function PhotoSuggest({ orgId, categories, units, onApply }: Props) {
   const { t } = useI18n();
@@ -66,6 +66,7 @@ export function PhotoSuggest({ orgId, categories, units, onApply }: Props) {
       });
       setStatus('ready');
 
+      // Similar-product check, using the same on-device matcher as "Find by photo".
       const page = await catalog.searchProducts({
         orgId, search: '', categoryId: null, brandId: null, includeArchived: false, limit: 300, offset: 0,
       });
@@ -96,77 +97,71 @@ export function PhotoSuggest({ orgId, categories, units, onApply }: Props) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2"><Camera aria-hidden="true" className="size-4" />{t('photo_suggest.title')}</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-4">
-        <p className="text-sm text-muted-foreground">{t('photo_suggest.hint')}</p>
+    <div className="flex flex-col gap-4 rounded-xl border border-dashed border-primary/50 bg-primary/5 p-4 md:col-span-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button asChild size="lg" disabled={status === 'reading'}>
+          <label className="cursor-pointer">
+            <Camera aria-hidden="true" />
+            {t('photo_suggest.button')}
+            <input type="file" accept="image/*" className="sr-only"
+              onChange={(e) => { void onPick(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+        </Button>
+        <BarcodeScanner onScan={(code) => setFields((f) => ({ ...f, barcode: code }))} />
+        {fields.barcode ? <span dir="ltr" className="font-mono text-xs">{fields.barcode}</span> : null}
+      </div>
+      <p className="text-sm text-muted-foreground">{t('photo_suggest.hint')}</p>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Button asChild disabled={status === 'reading'}>
-            <label className="cursor-pointer">
-              <Camera aria-hidden="true" />
-              {t('photo_suggest.pick')}
-              <input type="file" accept="image/*" capture="environment" className="sr-only"
-                onChange={(e) => { void onPick(e.target.files?.[0]); e.target.value = ''; }} />
+      {status === 'reading' ? (
+        <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <Spinner label={t('photo_suggest.reading')} />{t('photo_suggest.reading')} {Math.round(progress * 100)}%
+        </p>
+      ) : null}
+      {status === 'error' ? <Alert variant="destructive">{t('photo_suggest.failed')}</Alert> : null}
+
+      {status === 'ready' ? (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[120px_1fr]">
+          {preview ? <img src={preview} alt="" className="h-28 w-28 rounded-lg object-cover" /> : null}
+          <div className="flex flex-col gap-3">
+            {similar.length > 0 ? (
+              <Alert variant="warning">
+                {t('photo_suggest.similar')}: {similar.map((m) => `${similarNames.get(m.id)?.name ?? ''} (${similarNames.get(m.id)?.sku ?? ''})`).join(', ')}
+              </Alert>
+            ) : null}
+            {translated ? <p className="text-xs text-muted-foreground">{t('photo_suggest.translated_note')}</p> : null}
+            <label className="flex flex-col gap-1 text-sm">{t('product.name_en')}
+              <Input dir="ltr" lang="en" value={fields.nameEn ?? ''} onChange={(e) => setFields({ ...fields, nameEn: e.target.value })} />
             </label>
-          </Button>
-          <BarcodeScanner onScan={(code) => setFields((f) => ({ ...f, barcode: code }))} />
-          {fields.barcode ? <span dir="ltr" className="font-mono text-xs">{fields.barcode}</span> : null}
-        </div>
-
-        {status === 'reading' ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-            <Spinner label={t('photo_suggest.reading')} />{t('photo_suggest.reading')} {Math.round(progress * 100)}%
-          </p>
-        ) : null}
-        {status === 'error' ? <Alert variant="destructive">{t('photo_suggest.failed')}</Alert> : null}
-
-        {status === 'ready' ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-[120px_1fr]">
-            {preview ? <img src={preview} alt="" className="h-28 w-28 rounded-lg object-cover" /> : null}
-            <div className="flex flex-col gap-3">
-              {similar.length > 0 ? (
-                <Alert variant="warning">
-                  {t('photo_suggest.similar')}: {similar.map((m) => `${similarNames.get(m.id)?.name ?? ''} (${similarNames.get(m.id)?.sku ?? ''})`).join(', ')}
-                </Alert>
-              ) : null}
-              {translated ? <p className="text-xs text-muted-foreground">{t('photo_suggest.translated_note')}</p> : null}
-              <label className="flex flex-col gap-1 text-sm">{t('product.name_en')}
-                <Input dir="ltr" lang="en" value={fields.nameEn ?? ''} onChange={(e) => setFields({ ...fields, nameEn: e.target.value })} />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">{t('product.name_ar')}
-                <Input dir="rtl" lang="ar" value={fields.nameAr ?? ''} onChange={(e) => setFields({ ...fields, nameAr: e.target.value })} />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">{t('product.name_bn')}
-                <Input lang="bn" value={fields.nameBn ?? ''} onChange={(e) => setFields({ ...fields, nameBn: e.target.value })} />
-              </label>
-              <label className="flex flex-col gap-1 text-sm">{t('product.category')}
-                <NativeSelect value={fields.categoryId ?? ''} onChange={(e) => setFields({ ...fields, categoryId: e.target.value })}>
-                  <option value="">{t('photo_suggest.none_suggested')}</option>
-                  {categories.map((c) => <option key={c.id} value={c.id}>{c.nameEn}</option>)}
-                </NativeSelect>
-              </label>
-              <label className="flex flex-col gap-1 text-sm">{t('product.base_unit')}
-                <NativeSelect value={fields.unitId ?? ''} onChange={(e) => setFields({ ...fields, unitId: e.target.value })}>
-                  <option value="">{t('photo_suggest.none_suggested')}</option>
-                  {units.map((u) => <option key={u.id} value={u.id}>{u.code}</option>)}
-                </NativeSelect>
-              </label>
-              {rawText ? (
-                <details className="text-xs text-muted-foreground">
-                  <summary className="cursor-pointer">{t('photo_suggest.read_text')}</summary>
-                  <pre className="mt-2 whitespace-pre-wrap" dir="auto">{rawText}</pre>
-                </details>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" onClick={apply}><Check aria-hidden="true" />{t('photo_suggest.apply')}</Button>
-              </div>
+            <label className="flex flex-col gap-1 text-sm">{t('product.name_ar')}
+              <Input dir="rtl" lang="ar" value={fields.nameAr ?? ''} onChange={(e) => setFields({ ...fields, nameAr: e.target.value })} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">{t('product.name_bn')}
+              <Input lang="bn" value={fields.nameBn ?? ''} onChange={(e) => setFields({ ...fields, nameBn: e.target.value })} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">{t('product.category')}
+              <NativeSelect value={fields.categoryId ?? ''} onChange={(e) => setFields({ ...fields, categoryId: e.target.value })}>
+                <option value="">{t('photo_suggest.none_suggested')}</option>
+                {categories.map((c) => <option key={c.id} value={c.id}>{c.nameEn}</option>)}
+              </NativeSelect>
+            </label>
+            <label className="flex flex-col gap-1 text-sm">{t('product.base_unit')}
+              <NativeSelect value={fields.unitId ?? ''} onChange={(e) => setFields({ ...fields, unitId: e.target.value })}>
+                <option value="">{t('photo_suggest.none_suggested')}</option>
+                {units.map((u) => <option key={u.id} value={u.id}>{u.code}</option>)}
+              </NativeSelect>
+            </label>
+            {rawText ? (
+              <details className="text-xs text-muted-foreground">
+                <summary className="cursor-pointer">{t('photo_suggest.read_text')}</summary>
+                <pre className="mt-2 whitespace-pre-wrap" dir="auto">{rawText}</pre>
+              </details>
+            ) : null}
+            <div>
+              <Button type="button" onClick={apply}><Check aria-hidden="true" />{t('photo_suggest.apply')}</Button>
             </div>
           </div>
-        ) : null}
-      </CardContent>
-    </Card>
+        </div>
+      ) : null}
+    </div>
   );
 }
