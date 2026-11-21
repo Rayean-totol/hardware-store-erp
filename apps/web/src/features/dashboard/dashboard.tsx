@@ -79,7 +79,7 @@ export function Dashboard() {
       {summary.error ? <ErrorAlert error={summary.error} onRetry={() => void summary.refetch()} /> : null}
 
       {/* Real inventory figures */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard tone="cyan" icon={Boxes} label={t('dashboard.stock_value')} value={s ? money(s.stockValue) : null}
           note={t('dashboard.stock_value_note')} />
         <StatCard tone="blue" icon={Package} label={t('dashboard.products')} value={s ? fmt.number(s.productCount) : null} />
@@ -90,7 +90,7 @@ export function Dashboard() {
 
       {/* Figures that need modules not built yet: shown honestly, never as sample numbers */}
       <h2 className="mb-3 mt-8 text-sm font-medium text-muted-foreground">{t('dashboard.pending_title')}</h2>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard tone="green" icon={BarChart3} label={t('dashboard.today_sales')} value={null} note={t('dashboard.needs_pos')} />
         <StatCard tone="blue" icon={Truck} label={t('dashboard.today_purchases')} value={null} note={t('dashboard.needs_purchase')} />
         <StatCard tone="orange" icon={Receipt} label={t('dashboard.today_expenses')} value={null} note={t('dashboard.needs_accounts')} />
@@ -101,7 +101,7 @@ export function Dashboard() {
         <StatCard tone="orange" icon={Percent} label={t('dashboard.net_vat')} value={null} note={t('dashboard.needs_vat')} />
       </div>
 
-      <div className="mt-8 grid gap-4 xl:grid-cols-[1.4fr_1fr]">
+      <div className="mt-8 grid grid-cols-1 gap-4 xl:grid-cols-[1.4fr_1fr]">
         <Card className="border-border bg-card/80">
           <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="text-base">{t('dashboard.low_stock_table')}</CardTitle>
@@ -139,7 +139,7 @@ export function Dashboard() {
           <CardHeader><CardTitle className="text-base">{t('dashboard.charts_title')}</CardTitle></CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">{t('dashboard.charts_pending')}</p>
-            <div className="mt-4 flex items-center gap-2"><Badge variant="outline">{t('dashboard.phase_pos')}</Badge><Badge variant="outline">{t('dashboard.phase_purchase')}</Badge></div>
+            <div className="mt-4 flex flex-wrap items-center gap-2"><Badge variant="outline">{t('dashboard.phase_pos')}</Badge><Badge variant="outline">{t('dashboard.phase_purchase')}</Badge></div>
           </CardContent>
         </Card>
       </div>

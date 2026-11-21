@@ -10,10 +10,12 @@ import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
 import { useWarehouses } from './use-warehouses';
+import { useConnection } from '@/providers/connection-provider';
 
 const blank = { id: undefined as string | undefined, branchId: '', code: '', nameEn: '', nameAr: '', nameBn: '', isActive: true };
 
 export function WarehousesPage() {
+  const { writable } = useConnection();
   const { t, locale } = useI18n();
   const { inventory } = useServices();
   const { can } = useSession();
@@ -83,7 +85,7 @@ export function WarehousesPage() {
       {canManage ? (
         <Card>
           <CardContent className="pt-5">
-            <form className="grid gap-4 md:grid-cols-2" onSubmit={(e) => {
+            <form className="grid grid-cols-1 gap-4 md:grid-cols-2" onSubmit={(e) => {
               e.preventDefault();
               setSubmitted(true);
               if (form.code.trim() && form.nameEn.trim() && form.nameAr.trim() && form.branchId) save.mutate();
@@ -111,7 +113,7 @@ export function WarehousesPage() {
                 {t('common.active')}
               </label>
               <div className="flex gap-2 md:col-span-2">
-                <Button type="submit" disabled={save.isPending}>{form.id ? t('common.save') : t('warehouses.add')}</Button>
+                <Button type="submit" disabled={save.isPending || !writable}>{form.id ? t('common.save') : t('warehouses.add')}</Button>
                 {form.id ? <Button variant="outline" onClick={() => setForm({ ...blank, branchId: branches[0]?.id ?? '' })}>{t('common.cancel')}</Button> : null}
               </div>
             </form>

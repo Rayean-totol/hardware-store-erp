@@ -12,11 +12,6 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-vi.mock('@/providers/sync-provider', () => ({
-  useSync: () => ({ status: 'online', pending: 0, flush: async () => undefined }),
-  SyncProvider: ({ children }: { children: React.ReactNode }) => children,
-}));
-
 const PO = PURCHASE_ORDERS[0]!;
 
 describe('purchase order list', () => {

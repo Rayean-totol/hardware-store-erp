@@ -1,4 +1,4 @@
-import type { Brand, CatalogRepository, Category, Customer, InventoryRepository, MembershipContext, OrgRepository, Product, PurchaseOrder, PurchaseOrderRepository, SalesRepository, Supplier, SupplierRepository, SyncTransport, Unit, Warehouse } from '@erp/data';
+import type { Brand, CatalogRepository, Category, Customer, InventoryRepository, MembershipContext, MovementPayload, OrgRepository, Product, PurchaseOrder, PurchaseOrderRepository, SalesRepository, Supplier, SupplierRepository, Unit, Warehouse } from '@erp/data';
 import { ROLE_PERMISSIONS, type SystemRole } from '@erp/domain';
 import type { Locale } from '@erp/i18n';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -6,6 +6,7 @@ import { render } from '@testing-library/react';
 import type * as React from 'react';
 import { vi } from 'vitest';
 import type { AuthService, ProductImageStore, Services } from '@/lib/services';
+import { ConnectionContext, type ConnectionValue } from '@/providers/connection-provider';
 import { I18nProvider } from '@/providers/i18n-provider';
 import { ServicesProvider } from '@/providers/services-provider';
 import { SessionProvider, useSession } from '@/providers/session-provider';
@@ -94,7 +95,8 @@ export function fakeServices(opts: { role?: SystemRole; products?: Product[] } =
     saveCategory: vi.fn(),
     saveBrand: vi.fn(),
     searchProducts: vi.fn(async (q) => {
-      const items = products.filter((p) => !q.search || p.sku.includes(q.search.toUpperCase()) || p.nameEn.toLowerCase().includes(q.search.toLowerCase()));
+      const items = products.filter((p) => !q.search || p.sku.includes(q.search.toUpperCase()) || p.nameEn.toLowerCase().includes(q.search.toLowerCase())
+        || p.units.some((u) => u.barcode === q.search));
       return { items, total: items.length };
     }),
     getProduct: vi.fn(async (id) => products.find((p) => p.id === id) ?? null),
@@ -122,18 +124,13 @@ export function fakeServices(opts: { role?: SystemRole; products?: Product[] } =
     listLowStock: vi.fn(async () => []),
     getInventorySummary: vi.fn(async () => ({ stockValue: '0', stockPositions: 0, outOfStockCount: 0, lowStockCount: 0, productCount: 0 })),
     listMovements: vi.fn(async () => []),
-    applyMovements: vi.fn(async () => []),
+    applyMovements: vi.fn(async (_org: string, _device: string, batch: MovementPayload[]) => batch.map((m) => ({
+      clientId: m.clientId, status: 'applied' as const, movementId: 'mv-1', balanceAfter: '0', averageCostAfter: '0',
+      warnings: [], code: null, message: null, detail: null,
+    }))),
     listPriceTiers: vi.fn(async () => []),
     savePriceTiers: vi.fn(async () => 0),
     resolveSalePrice: vi.fn(async () => null),
-  };
-  const syncTransport: SyncTransport = {
-    applyMovements: vi.fn(async () => []),
-    listStockLevels: vi.fn(async () => []),
-    loadCatalog: vi.fn(async () => ({
-      products: [],
-      allowNegativeStock: true,
-    })),
   };
   const sales: SalesRepository = {
     finalizeSale: vi.fn(async () => ({
@@ -172,7 +169,7 @@ export function fakeServices(opts: { role?: SystemRole; products?: Product[] } =
     upload: vi.fn(async () => 'org/product/x.jpg'),
     signedUrl: vi.fn(async () => 'https://example.test/x.jpg'),
   };
-  const services: Services = { catalog, org, auth, inventory, sales, suppliers, purchaseOrders, syncTransport, productImages };
+  const services: Services = { catalog, org, auth, inventory, sales, suppliers, purchaseOrders, productImages };
   return services;
 }
 
@@ -182,16 +179,23 @@ function WhenReady({ children }: { children: React.ReactNode }) {
   return status === 'signed_in' && membership ? <>{children}</> : null;
 }
 
-export function renderWithProviders(ui: React.ReactElement, opts: { services?: Services; locale?: Locale } = {}) {
+export function renderWithProviders(
+  ui: React.ReactElement,
+  opts: { services?: Services; locale?: Locale; connection?: 'online' | 'offline' } = {},
+) {
   const services = opts.services ?? fakeServices();
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const online = opts.connection !== 'offline';
+  const connection: ConnectionValue = { state: online ? 'online' : 'offline', writable: online, revalidate: async () => online };
   const result = render(
     <I18nProvider locale={opts.locale ?? 'en'}>
-      <QueryClientProvider client={queryClient}>
-        <ServicesProvider services={services}>
-          <SessionProvider><WhenReady>{ui}</WhenReady></SessionProvider>
-        </ServicesProvider>
-      </QueryClientProvider>
+      <ConnectionContext.Provider value={connection}>
+        <QueryClientProvider client={queryClient}>
+          <ServicesProvider services={services}>
+            <SessionProvider><WhenReady>{ui}</WhenReady></SessionProvider>
+          </ServicesProvider>
+        </QueryClientProvider>
+      </ConnectionContext.Provider>
     </I18nProvider>,
   );
   return { ...result, services };

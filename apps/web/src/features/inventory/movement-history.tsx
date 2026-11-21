@@ -10,7 +10,7 @@ import { PageHeader } from '@/components/page-header';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useSession } from '@/providers/session-provider';
-import { useSync } from '@/providers/sync-provider';
+import { useConnection } from '@/providers/connection-provider';
 import { useWarehouses } from './use-warehouses';
 
 const PAGE = 50;
@@ -19,7 +19,8 @@ export function MovementHistory() {
   const { t, fmt, locale } = useI18n();
   const { inventory } = useServices();
   const { membership } = useSession();
-  const sync = useSync();
+  const { state } = useConnection();
+  const online = state === 'online';
   const warehouses = useWarehouses(membership?.orgId ?? '');
   const [warehouseId, setWarehouseId] = React.useState('');
   const [type, setType] = React.useState<'' | 'stock_in' | 'stock_out' | 'adjustment'>('');
@@ -28,7 +29,7 @@ export function MovementHistory() {
 
   const history = useQuery({
     queryKey: ['movements', wh, type, page],
-    enabled: Boolean(wh) && sync.online,
+    enabled: Boolean(wh) && online,
     queryFn: () => inventory.listMovements({ warehouseId: wh, movementType: type || null, limit: PAGE, offset: page * PAGE }),
   });
 
@@ -49,11 +50,11 @@ export function MovementHistory() {
         </NativeSelect>
       </div>
 
-      {!sync.online ? <Alert variant="info">{t('history.offline')}</Alert> : null}
+      {!online ? <Alert variant="info">{t('history.offline')}</Alert> : null}
       {history.error ? <ErrorAlert error={history.error} onRetry={() => void history.refetch()} /> : null}
 
       <Card>
-        {history.isPending && sync.online ? <div className="p-6"><Spinner label={t('common.loading')} /></div> : (
+        {history.isPending && online ? <div className="p-6"><Spinner label={t('common.loading')} /></div> : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -67,7 +68,7 @@ export function MovementHistory() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(history.data ?? []).length === 0 && sync.online ? (
+              {(history.data ?? []).length === 0 && online ? (
                 <TableRow><TableCell colSpan={7} className="py-10 text-center text-muted-foreground">{t('history.empty')}</TableCell></TableRow>
               ) : null}
               {(history.data ?? []).map((m: Movement) => (
@@ -87,7 +88,7 @@ export function MovementHistory() {
           </Table>
         )}
       </Card>
-      {sync.online ? (
+      {online ? (
         <div className="mt-4 flex items-center justify-end gap-2 text-sm">
           <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>{t('common.previous')}</Button>
           <span>{t('common.page', { page: fmt.number(page + 1), pages: fmt.number(page + 1) })}</span>

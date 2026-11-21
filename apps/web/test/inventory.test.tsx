@@ -1,134 +1,92 @@
-import { createMemoryStore, SyncEngine, type CachedProduct, type FlushReport, type OutboxEntry } from '@erp/data';
-import { screen, waitFor, within } from '@testing-library/react';
+import { DataError } from '@erp/data';
+import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { MovementForm } from '@/features/inventory/movement-form';
-import { SyncPanel } from '@/features/inventory/sync-panel';
-import { ORG, renderWithProviders, UNITS, fakeServices } from './helpers';
+import { fakeServices, HAMMER, renderWithProviders, WAREHOUSES } from './helpers';
 
-const sync = vi.hoisted(() => ({ value: null as unknown }));
-vi.mock('@/providers/sync-provider', () => ({ useSync: () => sync.value }));
+const BARCODE = '2000000100104';
 
-const PCS = UNITS[0]!.id;
-const BOX = UNITS[1]!.id;
-const WH = '70000000-0000-4000-8000-000000000001';
-const SCREW: CachedProduct = {
-  id: '50000000-0000-4000-8000-000000000010', sku: 'FST-WS-4X40', nameEn: 'Wood screw', nameAr: 'برغي', nameBn: null,
-  productType: 'stock', baseUnitId: PCS, baseUnitAllowsFraction: false, reorderLevel: '500', archived: false,
-  units: [
-    { unitId: PCS, factor: '1', barcode: '2000000100012' },
-    { unitId: BOX, factor: '200', barcode: '2000000100029' },
-  ],
-};
-
-let engine: SyncEngine;
-let online: boolean;
-let rejectAll: string | null;
-const clock = Date.parse('2026-11-20T10:00:00Z');
-let counter = 0;
-
-function makeEngine(allowNegative = true) {
-  const transport = {
-    applyMovements: vi.fn(async (_o: string, _d: string, batch: Array<{ clientId: string }>) => {
-      if (!online) throw new Error('offline');
-      return batch.map((m) => rejectAll
-        ? { clientId: m.clientId, status: 'rejected' as const, movementId: null, balanceAfter: null, averageCostAfter: null, warnings: [], code: rejectAll, message: rejectAll, detail: null }
-        : { clientId: m.clientId, status: 'applied' as const, movementId: 'x', balanceAfter: '1', averageCostAfter: '1', warnings: [], code: null, message: null, detail: null });
-    }),
-    listStockLevels: vi.fn(async () => []),
-    loadCatalog: vi.fn(async () => ({ products: [SCREW], allowNegativeStock: allowNegative })),
-  };
-  return new SyncEngine({
-    orgId: ORG, deviceId: 'UI-TEST', store: createMemoryStore(), transport,
-    now: () => clock, newId: () => `00000000-0000-4000-8000-${String(++counter).padStart(12, '0')}`,
-  });
+async function pickHammer(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(await screen.findByLabelText('Barcode or SKU'), `${BARCODE}{Enter}`);
+  expect(await screen.findByText('Claw hammer')).toBeInTheDocument();
 }
 
-function setSync(overrides: Partial<Record<string, unknown>> = {}) {
-  const state = {
-    ready: true, engine, durable: true, storageError: null, online,
-    status: null as unknown, queue: [] as OutboxEntry[], lastReport: null as FlushReport | null,
-    flush: async () => {
-      const report = await engine.flush();
-      state.lastReport = report;
-      return report;
-    },
-    refresh: async () => {},
-    ...overrides,
-  };
-  sync.value = state;
-  return state;
-}
-
-beforeEach(async () => {
-  online = true;
-  rejectAll = null;
-  engine = makeEngine(true);
-  await engine.refreshCatalog();
-  setSync();
-});
-
-describe('stock movement form', () => {
-  it('scans a barcode from the downloaded catalog and records a receipt', async () => {
+describe('stock movement form (server-first)', () => {
+  it('finds a product on the server by barcode and records a receipt', async () => {
+    const services = fakeServices();
     const user = userEvent.setup();
-    renderWithProviders(<MovementForm initialType="stock_in" />, { services: fakeServices() });
-    const scan = await screen.findByLabelText('Barcode or SKU');
-    await user.type(scan, '2000000100029{Enter}');
-    expect(await screen.findByText('Wood screw')).toBeInTheDocument();
+    renderWithProviders(<MovementForm initialType="stock_in" />, { services });
+    await pickHammer(user);
     await user.type(screen.getByLabelText(/^Quantity/), '2');
     await user.type(screen.getByLabelText(/Cost per unit/), '25');
     await user.click(screen.getByRole('button', { name: 'Record movement' }));
     expect(await screen.findByText('Movement recorded.')).toBeInTheDocument();
-    const queue = await engine.queued();
-    expect(queue).toHaveLength(0);
+    expect(services.inventory.applyMovements).toHaveBeenCalledTimes(1);
+    const batch = vi.mocked(services.inventory.applyMovements).mock.calls[0]![2];
+    expect(batch).toEqual([expect.objectContaining({
+      productId: HAMMER.id, warehouseId: WAREHOUSES[0]!.id, movementType: 'stock_in', quantity: '2', unitCost: '25',
+    })]);
+    expect(batch[0]!.clientId).toMatch(/^[0-9a-f-]{36}$/);
   });
 
-  it('shows validation messages instead of queueing invalid movements', async () => {
+  it('reuses the same idempotency key when a failed send is retried unchanged', async () => {
+    const services = fakeServices();
+    vi.mocked(services.inventory.applyMovements)
+      .mockRejectedValueOnce(new DataError('network', 'Failed to fetch'))
+      .mockImplementation(async (_o, _d, batch) => batch.map((m) => ({
+        clientId: m.clientId, status: 'applied' as const, movementId: 'mv', balanceAfter: '2', averageCostAfter: '25',
+        warnings: [], code: null, message: null, detail: null,
+      })));
     const user = userEvent.setup();
-    renderWithProviders(<MovementForm initialType="adjustment" />, { services: fakeServices() });
-    await user.type(await screen.findByLabelText('Barcode or SKU'), '2000000100012{Enter}');
-    await user.type(await screen.findByLabelText(/Signed quantity/), '-3');
+    renderWithProviders(<MovementForm initialType="stock_in" />, { services });
+    await pickHammer(user);
+    await user.type(screen.getByLabelText(/^Quantity/), '2');
+    await user.type(screen.getByLabelText(/Cost per unit/), '25');
+    await user.click(screen.getByRole('button', { name: 'Record movement' }));
+    expect(await screen.findByText(/Cannot reach the server/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Record movement' }));
+    expect(await screen.findByText('Movement recorded.')).toBeInTheDocument();
+    const keys = vi.mocked(services.inventory.applyMovements).mock.calls.map((c) => c[2][0]!.clientId);
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
+  });
+
+  it('shows validation messages and sends nothing for an invalid adjustment', async () => {
+    const services = fakeServices();
+    const user = userEvent.setup();
+    renderWithProviders(<MovementForm initialType="adjustment" />, { services });
+    await pickHammer(user);
+    await user.type(screen.getByLabelText(/Signed quantity/), '-3');
     await user.click(screen.getByRole('button', { name: 'Record movement' }));
     expect(await screen.findByText('Choose a reason for the adjustment.')).toBeInTheDocument();
-    expect(await engine.queued()).toHaveLength(0);
+    expect(services.inventory.applyMovements).not.toHaveBeenCalled();
   });
 
-  it('refuses to queue an overdraw when the organization disallows negative stock, with the reason', async () => {
-    engine = makeEngine(false);
-    await engine.refreshCatalog();
-    setSync({ engine, online: false });
+  it('keeps a server rejection visible with its reason and does not report success', async () => {
+    const services = fakeServices();
+    vi.mocked(services.inventory.applyMovements).mockImplementation(async (_o, _d, batch) => batch.map((m) => ({
+      clientId: m.clientId, status: 'rejected' as const, movementId: null, balanceAfter: null, averageCostAfter: null,
+      warnings: [], code: 'forbidden', message: 'forbidden', detail: null,
+    })));
     const user = userEvent.setup();
-    renderWithProviders(<MovementForm initialType="stock_out" />, { services: fakeServices() });
-    await user.type(await screen.findByLabelText('Barcode or SKU'), '2000000100012{Enter}');
-    await user.type(await screen.findByLabelText(/^Quantity/), '5');
-    await user.click(screen.getByRole('button', { name: 'Record movement' }));
-    expect(await screen.findByText(/Not enough stock for this movement \(available: 0\)/)).toBeInTheDocument();
-  });
-
-  it('keeps a server rejection visible for review instead of reporting success', async () => {
-    rejectAll = 'forbidden';
-    const user = userEvent.setup();
-    renderWithProviders(<MovementForm initialType="stock_in" />, { services: fakeServices() });
-    await user.type(await screen.findByLabelText('Barcode or SKU'), '2000000100012{Enter}');
-    await user.type(await screen.findByLabelText(/^Quantity/), '1');
+    renderWithProviders(<MovementForm initialType="stock_in" />, { services });
+    await pickHammer(user);
+    await user.type(screen.getByLabelText(/^Quantity/), '1');
     await user.type(screen.getByLabelText(/Cost per unit/), '3');
     await user.click(screen.getByRole('button', { name: 'Record movement' }));
-    expect(await screen.findByText(/kept under Sync for review/)).toBeInTheDocument();
-    const [failed] = await engine.queued();
-    expect(failed).toMatchObject({ status: 'failed', lastError: { code: 'forbidden' } });
+    expect(await screen.findByText('You do not have permission to do this.')).toBeInTheDocument();
+    expect(screen.queryByText('Movement recorded.')).not.toBeInTheDocument();
   });
 
-  it('queues while offline and says so', async () => {
-    online = false;
-    setSync({ online: false });
+  it('while offline, product search says it needs a connection and recording is disabled', async () => {
+    const services = fakeServices();
     const user = userEvent.setup();
-    renderWithProviders(<MovementForm initialType="stock_in" />, { services: fakeServices() });
-    await user.type(await screen.findByLabelText('Barcode or SKU'), '2000000100012{Enter}');
-    await user.type(await screen.findByLabelText(/^Quantity/), '4');
-    await user.type(screen.getByLabelText(/Cost per unit/), '2');
-    await user.click(screen.getByRole('button', { name: 'Record movement' }));
-    expect(await screen.findByText(/Saved on this device/)).toBeInTheDocument();
-    await waitFor(async () => expect((await engine.queued())[0]?.status).toBe('pending'));
+    renderWithProviders(<MovementForm initialType="stock_in" />, { services, connection: 'offline' });
+    await user.type(await screen.findByLabelText('Barcode or SKU'), `${BARCODE}{Enter}`);
+    expect(await screen.findByText('Product search needs a connection to the server.')).toBeInTheDocument();
+    expect(services.catalog.searchProducts).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Record movement' })).not.toBeInTheDocument();
   });
 
   it('only offers the movement types the role may record', async () => {
@@ -143,24 +101,3 @@ describe('stock movement form', () => {
   });
 });
 
-describe('sync panel', () => {
-  it('shows connection state, counts and rejected movements with retry and discard', async () => {
-    rejectAll = 'forbidden';
-    await engine.enqueue({ warehouseId: WH, productId: SCREW.id, unitId: PCS, movementType: 'stock_in', quantity: '1', unitCost: '1', reasonCode: 'purchase' });
-    await engine.flush();
-    setSync({ engine, status: await engine.status(), queue: await engine.queued(), online: true });
-    renderWithProviders(<SyncPanel />, { services: fakeServices() });
-    expect(await screen.findByText('Online')).toBeInTheDocument();
-    expect(screen.getByText('Rejected by the server')).toBeInTheDocument();
-    const row = screen.getByText(/You do not have permission to do this/).closest('li')!;
-    expect(within(row).getByRole('button', { name: 'Retry' })).toBeInTheDocument();
-    expect(within(row).getByRole('button', { name: 'Discard' })).toBeInTheDocument();
-  });
-
-  it('warns when offline storage is not durable', async () => {
-    setSync({ durable: false, storageError: 'blocked by the browser' });
-    renderWithProviders(<SyncPanel />, { services: fakeServices() });
-    expect(await screen.findByText(/Offline storage is not available/)).toBeInTheDocument();
-    expect(screen.getByText(/blocked by the browser/)).toBeInTheDocument();
-  });
-});

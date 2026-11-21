@@ -4,6 +4,7 @@ import type { MembershipContext } from '@erp/data';
 import type { Permission } from '@erp/domain';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
+import { clearLocalBusinessData } from '@/lib/local-data';
 import type { AuthUser } from '@/lib/services';
 import { readPref, writePref } from '@/lib/storage';
 import { useServices } from './services-provider';
@@ -85,6 +86,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     },
     signOut: async () => {
       await auth.signOut();
+      // Business data kept on this device (held sales, unsent legacy entries, cache) goes with the session.
+      await clearLocalBusinessData();
       queryClient.clear();
     },
   };

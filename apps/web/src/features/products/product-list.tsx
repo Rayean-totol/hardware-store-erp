@@ -34,6 +34,7 @@ import { exportProductsCsv } from '@erp/data';
 import { catalogKeys, useBrands, useCategories, useUnits } from './use-catalog-data';
 import { PRODUCT_VIEW_PREF, type ProductView, parseProductView } from './catalog-view';
 import { ProductCard } from './product-card';
+import { useConnection } from '@/providers/connection-provider';
 
 const PAGE_SIZE = 25;
 
@@ -47,6 +48,7 @@ function useDebounced<T>(value: T, ms: number): T {
 }
 
 export function ProductList() {
+  const { writable } = useConnection();
   const { t, fmt, name } = useI18n();
   const { catalog } = useServices();
   const { orgId } = useMembership();
@@ -311,7 +313,7 @@ export function ProductList() {
                         </Button>
                         {can('catalog.archive') ? (
                           p.archivedAt ? (
-                            <Button variant="ghost" size="icon" aria-label={`${t('common.restore')} ${p.sku}`} onClick={() => archive.mutate(p)}>
+                            <Button variant="ghost" size="icon" aria-label={`${t('common.restore')} ${p.sku}`} disabled={!writable} onClick={() => archive.mutate(p)}>
                               <ArchiveRestore aria-hidden="true" />
                             </Button>
                           ) : (
@@ -349,7 +351,7 @@ export function ProductList() {
           <DialogDescription>{confirm ? t('products.archive_confirm', { name: name(confirm) }) : null}</DialogDescription>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setConfirm(null)}>{t('common.cancel')}</Button>
-            <Button variant="destructive" disabled={archive.isPending} onClick={() => confirm && archive.mutate(confirm)}>
+            <Button variant="destructive" disabled={archive.isPending || !writable} onClick={() => confirm && archive.mutate(confirm)}>
               {t('common.archive')}
             </Button>
           </div>

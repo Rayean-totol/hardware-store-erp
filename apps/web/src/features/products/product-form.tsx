@@ -34,6 +34,7 @@ import { Barcode, Plus, Trash2 } from 'lucide-react';
 import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
 import { useI18n } from '@/providers/i18n-provider';
+import { useConnection } from '@/providers/connection-provider';
 
 export interface ProductFormProps {
   orgId: string;
@@ -110,6 +111,7 @@ function randomBarcode(): string {
 }
 
 export function ProductForm(props: ProductFormProps) {
+  const { writable } = useConnection();
   const { orgId, product, units, categories, brands, pricesIncludeVat, canEditPrices } = props;
   const { t, tMaybe, fmt, name } = useI18n();
   const [draft, setDraft] = React.useState<ProductDraft>(() => (product ? draftFromProduct(product) : emptyDraft(orgId, units)));
@@ -246,7 +248,7 @@ export function ProductForm(props: ProductFormProps) {
 
       <Card>
         <CardHeader><CardTitle>{t('product.section_general')}</CardTitle></CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label={t('product.sku')} required error={errorFor('sku')}>
             {(p) => (
               <Input {...p} dir="ltr" className="font-mono uppercase" value={draft.sku} maxLength={40}
@@ -301,7 +303,7 @@ export function ProductForm(props: ProductFormProps) {
 
       <Card>
         <CardHeader><CardTitle>{t('product.section_tax')}</CardTitle></CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-2">
+        <CardContent className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <Field label={t('product.tax_category')}>
             {(p) => (
               <NativeSelect {...p} value={draft.taxCategory}
@@ -352,7 +354,7 @@ export function ProductForm(props: ProductFormProps) {
               const preview = vatPreview(row.salePrice);
               return (
                 <li key={index} className="rounded-lg border p-3" data-testid={`unit-row-${index}`}>
-                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1.6fr_1fr_auto]">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-[1.2fr_1fr_1.6fr_1fr_auto]">
                     <Field label={t('product.unit')} error={errorFor(`units.${index}.unitId`)}>
                       {(p) => (
                         <div className="flex items-center gap-2">
@@ -427,7 +429,7 @@ export function ProductForm(props: ProductFormProps) {
       </Card>
 
       <div className="flex gap-2">
-        <Button type="submit" disabled={saving}>{saving ? t('common.saving') : t('common.save')}</Button>
+        <Button type="submit" disabled={saving || !writable}>{saving ? t('common.saving') : t('common.save')}</Button>
         <Button variant="outline" onClick={props.onCancel}>{t('common.cancel')}</Button>
       </div>
     </form>

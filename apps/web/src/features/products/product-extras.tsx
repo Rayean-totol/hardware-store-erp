@@ -12,6 +12,7 @@ import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
 import { catalogKeys, useUnits } from './use-catalog-data';
+import { useConnection } from '@/providers/connection-provider';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
@@ -28,6 +29,7 @@ export function ProductExtras({ product }: { product: Product }) {
 }
 
 function ProductImage({ product }: { product: Product }) {
+  const { writable } = useConnection();
   const { t } = useI18n();
   const { catalog, productImages } = useServices();
   const { orgId } = useMembership();
@@ -87,7 +89,7 @@ function ProductImage({ product }: { product: Product }) {
                   if (f) upload.mutate(f, { onError: (err) => setLocalError(errorText(err)) });
                 }} />
             </label>
-            {product.imagePath ? <Button variant="ghost" onClick={() => remove.mutate()} disabled={remove.isPending}>{t('common.remove')}</Button> : null}
+            {product.imagePath ? <Button variant="ghost" onClick={() => remove.mutate()} disabled={remove.isPending || !writable}>{t('common.remove')}</Button> : null}
           </div>
         ) : null}
         <p className="text-xs text-muted-foreground">{t('product.image_hint')}</p>
@@ -97,6 +99,7 @@ function ProductImage({ product }: { product: Product }) {
 }
 
 function PriceTiers({ product }: { product: Product }) {
+  const { writable } = useConnection();
   const { t, fmt } = useI18n();
   const { inventory } = useServices();
   const { orgId } = useMembership();
@@ -204,7 +207,7 @@ function PriceTiers({ product }: { product: Product }) {
             }])}>
               <Plus aria-hidden="true" />{t('tiers.add')}
             </Button>
-            <Button size="sm" disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? t('common.saving') : t('common.save')}</Button>
+            <Button size="sm" disabled={save.isPending || !writable} onClick={() => save.mutate()}>{save.isPending ? t('common.saving') : t('common.save')}</Button>
           </div>
         ) : null}
         <p className="text-xs text-muted-foreground">{t('tiers.count', { count: fmt.number(rows?.length ?? 0) })}</p>

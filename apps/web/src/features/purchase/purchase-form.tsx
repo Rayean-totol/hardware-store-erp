@@ -12,6 +12,7 @@ import { catalogKeys, useUnits } from '@/features/products/use-catalog-data';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
+import { useConnection } from '@/providers/connection-provider';
 
 interface DraftLine {
   key: string;
@@ -28,6 +29,7 @@ const newKey = () => crypto.randomUUID();
 
 /** Create a draft, or edit one. Totals are previewed with the same rules the server applies. */
 export function PurchaseForm({ orderId }: { orderId: string | null }) {
+  const { writable } = useConnection();
   const { t, fmt, name } = useI18n();
   const { catalog, purchaseOrders, suppliers, inventory } = useServices();
   const membership = useMembership();
@@ -161,11 +163,11 @@ export function PurchaseForm({ orderId }: { orderId: string | null }) {
   return (
     <>
       <PageHeader title={orderId ? t('purchase.edit_title') : t('purchase.new_title')} />
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-base">{t('purchase.section_header')}</CardTitle></CardHeader>
-            <CardContent className="grid gap-3">
+            <CardContent className="grid grid-cols-1 gap-3">
               <Field label={t('purchase.field_supplier')} id="po-supplier" required>
                 {(p) => (
                   <NativeSelect {...p} value={supplierId} onChange={(e) => setSupplierId(e.target.value)}>
@@ -174,7 +176,7 @@ export function PurchaseForm({ orderId }: { orderId: string | null }) {
                   </NativeSelect>
                 )}
               </Field>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label={t('purchase.field_branch')} id="po-branch" required>
                   {(p) => (
                     <NativeSelect {...p} value={branchId} onChange={(e) => { setBranchId(e.target.value); setWarehouseId(''); }}>
@@ -203,11 +205,11 @@ export function PurchaseForm({ orderId }: { orderId: string | null }) {
         <div className="space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-base">{t('purchase.section_lines')}</CardTitle></CardHeader>
-            <CardContent className="grid gap-3">
+            <CardContent className="grid grid-cols-1 gap-3">
               <Field label={t('purchase.search')} id="po-search">
                 {(p) => <Input {...p} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('purchase.search_hint')} />}
               </Field>
-              <div className="grid gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 {(results.data?.items ?? []).map((p) => (
                   <button key={p.id} type="button" onClick={() => addProduct(p)}
                     className="flex items-center justify-between rounded-lg border border-border p-2 text-start hover:border-primary">
@@ -248,7 +250,7 @@ export function PurchaseForm({ orderId }: { orderId: string | null }) {
           </Card>
 
           <Card>
-            <CardContent className="grid gap-1 p-4 text-sm">
+            <CardContent className="grid grid-cols-1 gap-1 p-4 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">{t('purchase.subtotal')}</span><span className="tabular-nums">{fmt.money(totals?.net.toFixed(2) ?? 0)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">{t('purchase.discount')}</span><span className="tabular-nums">{fmt.money(totals?.discount.toFixed(2) ?? 0)}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">{t('purchase.vat')}</span><span className="tabular-nums">{fmt.money(totals?.vat.toFixed(2) ?? 0)}</span></div>
@@ -261,7 +263,7 @@ export function PurchaseForm({ orderId }: { orderId: string | null }) {
           {saveError ? <ErrorAlert error={saveError} /> : null}
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => router.push(orderId ? `/purchase-orders/detail/?id=${orderId}` : '/purchase-orders/')}>{t('common.cancel')}</Button>
-            <Button disabled={!canSave} onClick={() => void save()}>{busy ? t('common.saving') : t('purchase.save_draft')}</Button>
+            <Button disabled={!canSave || !writable} onClick={() => void save()}>{busy ? t('common.saving') : t('purchase.save_draft')}</Button>
           </div>
           {!can('purchase.create') ? <p className="text-xs text-muted-foreground">{t('purchase.no_create')}</p> : null}
         </div>
