@@ -9,3 +9,4 @@ export * from './inventory-models';
 export * from './inventory-repository';
 export * from './offline';
 export * from './product-io';
+export * from './sales-repository';

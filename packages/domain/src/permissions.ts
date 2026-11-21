@@ -16,6 +16,13 @@ export const PERMISSIONS = [
   'inventory.read',
   'inventory.move',
   'inventory.adjust',
+  'sales.read',
+  'sales.create',
+  'sales.discount',
+  'sales.price_override',
+  'sales.credit',
+  'sales.void',
+  'customers.manage',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -38,11 +45,13 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> = {
   manager: [
     'audit.read', 'catalog.read', 'catalog.write', 'catalog.price_write', 'catalog.archive',
     'inventory.read', 'inventory.move', 'inventory.adjust',
+    'sales.read', 'sales.create', 'sales.discount', 'sales.price_override', 'sales.credit', 'sales.void',
+    'customers.manage',
   ],
   storekeeper: ['catalog.read', 'catalog.write', 'inventory.read', 'inventory.move'],
-  cashier: ['catalog.read', 'inventory.read'],
-  accountant: ['catalog.read', 'audit.read', 'inventory.read'],
-  auditor: ['catalog.read', 'audit.read', 'inventory.read'],
+  cashier: ['catalog.read', 'inventory.read', 'sales.read', 'sales.create'],
+  accountant: ['catalog.read', 'audit.read', 'inventory.read', 'sales.read'],
+  auditor: ['catalog.read', 'audit.read', 'inventory.read', 'sales.read'],
 };
 
 export function hasPermission(granted: readonly string[], permission: Permission): boolean {

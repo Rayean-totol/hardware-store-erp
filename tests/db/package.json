@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:db": "vitest run --config vitest.db.config.ts",
-    "test:api": "vitest run --config vitest.api.config.ts",
+    "test:db": "vitest run --config vitest.db.config.ts && vitest run --config vitest.concurrency.config.ts",
+    "test:api": "vitest run --config vitest.api.config.ts && vitest run --config vitest.api-pos.config.ts",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
