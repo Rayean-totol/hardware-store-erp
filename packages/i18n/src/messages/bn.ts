@@ -264,6 +264,7 @@ export const bn: Messages = {
   'import.checking': 'ফাইল যাচাই করা হচ্ছে…',
   'import.choose_file': 'CSV ফাইল বাছুন',
   'import.count_create': '{count}টি তৈরি হবে',
+  'import.blocked_invalid': "আমদানি বন্ধ: {count}টি সারি অবৈধ। কিছুই সংরক্ষণ হয়নি। ফাইল ঠিক করে আবার নির্বাচন করুন।",
   'import.count_invalid': '{count}টি অবৈধ',
   'import.count_update': '{count}টি হালনাগাদ হবে',
   'import.create': 'তৈরি',

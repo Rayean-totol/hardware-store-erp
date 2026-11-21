@@ -1,6 +1,7 @@
 'use client';
 
 import { applyImportPlan, DataError, planImportFile, type ImportOutcome } from '@erp/data';
+import { importBlockReason } from './import-gate';
 import type { ImportPlan } from '@erp/domain';
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Spinner, Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@erp/ui';
 import { Upload } from 'lucide-react';
@@ -55,6 +56,7 @@ export function ProductImport() {
   }
 
   async function run() {
+    if (importBlockReason(plan) !== null) return; // belt and braces: never run a blocked plan
     if (!plan) return;
     setBusy('apply');
     setError(null);
@@ -83,7 +85,9 @@ export function ProductImport() {
     return (<><PageHeader title={t('import.title')} /><Alert variant="warning">{t('errors.forbidden')}</Alert></>);
   }
 
-  const runnable = plan !== null && plan.fatal.length === 0 && plan.counts.create + plan.counts.update > 0;
+  // Fail closed: any invalid row blocks the whole import (see import-gate.ts).
+  const block = importBlockReason(plan);
+  const runnable = block === null;
 
   return (
     <>
@@ -113,6 +117,11 @@ export function ProductImport() {
               <ul className="mt-1 list-disc ps-5">
                 {plan.fatal.map((f, i) => <li key={i}>{f.line > 0 ? t('import.line', { line: f.line }) + ' ' : ''}{issueText(f.code)} {f.path}</li>)}
               </ul>
+            </Alert>
+          ) : null}
+          {block === 'invalid' ? (
+            <Alert variant="destructive" className="mb-4">
+              <p>{t('import.blocked_invalid', { count: fmt.number(plan.counts.invalid) })}</p>
             </Alert>
           ) : null}
           <div className="mb-4 flex flex-wrap items-center gap-3 text-sm">

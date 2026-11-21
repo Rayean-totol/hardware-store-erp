@@ -263,6 +263,7 @@ export const en = {
   'import.checking': 'Checking file…',
   'import.choose_file': 'Choose CSV file',
   'import.count_create': '{count} to create',
+  'import.blocked_invalid': "Import is blocked: {count} row(s) are invalid. Nothing has been saved. Correct the file, then choose it again.",
   'import.count_invalid': '{count} invalid',
   'import.count_update': '{count} to update',
   'import.create': 'Create',

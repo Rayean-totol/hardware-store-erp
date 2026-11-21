@@ -264,6 +264,7 @@ export const ar: Messages = {
   'import.checking': 'جارٍ فحص الملف…',
   'import.choose_file': 'اختر ملف CSV',
   'import.count_create': '{count} للإنشاء',
+  'import.blocked_invalid': "الاستيراد متوقف: يوجد {count} صف غير صالح. لم يتم حفظ شيء. صحّح الملف ثم اختره مرة أخرى.",
   'import.count_invalid': '{count} غير صالح',
   'import.count_update': '{count} للتحديث',
   'import.create': 'إنشاء',
