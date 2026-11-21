@@ -213,6 +213,21 @@ describe('POS audit: branch isolation on replay and cancel', () => {
   });
 });
 
+describe('POS audit: cancellation edge cases', () => {
+  it('a sale of a product archived afterwards cannot be cancelled until the product is restored (no partial reversal)', async () => {
+    await asUser(USERS.owner, async (sql) => {
+      await stockInAt(sql, R.ruh.id, '10', '2');
+      const sale = await sell(sql, { lines: [line('2')], payments: full('2') });
+      const before = await stockRow(sql, R.ruh.id);
+      await sql('update public.products set archived_at = now() where id = $1', [R.screw]);
+      await refused(sql, () => sql('select public.cancel_sale($1, $2, $3, $4)', [DEMO_ORG, sale.sale_id, 'archived', 'POS-AUDIT']), 'product.archived');
+      expect(await stockRow(sql, R.ruh.id)).toEqual(before);
+      const { rows } = await sql('select status from public.sales where id = $1', [sale.sale_id]);
+      expect(rows[0].status).toBe('finalized');
+    });
+  });
+});
+
 describe('POS audit: cost handling on sale and cancellation', () => {
   it('a sale records the average cost; sale and cancel leave the average unchanged; quantity returns', async () => {
     await asUser(USERS.owner, async (sql) => {
