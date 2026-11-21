@@ -1,13 +1,15 @@
 'use client';
 
-import type { Product, SaleReceipt } from '@erp/data';
+import { DataError, type Product, type SaleReceipt } from '@erp/data';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Input, NativeSelect, Spinner } from '@erp/ui';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Minus, Pause, Play, Plus, Printer, Receipt, Search, ShoppingCart, Trash2 } from 'lucide-react';
 import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
 import { PageHeader } from '@/components/page-header';
+import { WriteHint } from '@/components/write-hint';
 import { readPref, writePref } from '@/lib/storage';
+import { useConnection } from '@/providers/connection-provider';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
@@ -26,21 +28,6 @@ function useDebounced<T>(value: T, ms: number): T {
   return debounced;
 }
 
-function useOnline(): boolean {
-  const [online, setOnline] = React.useState(true);
-  React.useEffect(() => {
-    const update = () => setOnline(navigator.onLine);
-    update();
-    window.addEventListener('online', update);
-    window.addEventListener('offline', update);
-    return () => {
-      window.removeEventListener('online', update);
-      window.removeEventListener('offline', update);
-    };
-  }, []);
-  return online;
-}
-
 const newId = () => crypto.randomUUID();
 
 export function PosScreen() {
@@ -50,7 +37,9 @@ export function PosScreen() {
   const { can } = useSession();
   const queryClient = useQueryClient();
   const orgId = membership.orgId;
-  const online = useOnline();
+  const { state, revalidate } = useConnection();
+  const online = state === 'online';
+  const searchRef = React.useRef<HTMLInputElement>(null);
 
   const [branchId, setBranchId] = React.useState<string>(membership.branches[0]?.id ?? '');
   const [search, setSearch] = React.useState('');
@@ -118,8 +107,10 @@ export function PosScreen() {
   if (!online) checkoutBlockers.push('pos.blocker_offline');
 
   const checkout = useMutation({
-    mutationFn: () =>
-      sales.finalizeSale({
+    mutationFn: async () => {
+      // Ask the server again right before the sale: a stale "online" state must never submit.
+      if (!(await revalidate())) throw new DataError('offline.writes_disabled', 'offline');
+      return sales.finalizeSale({
         clientId: clientIdRef.current,
         orgId,
         branchId,
@@ -141,7 +132,8 @@ export function PosScreen() {
           tendered: p.tendered ? String(p.tendered) : null,
           reference: null,
         })),
-      }),
+      });
+    },
     onSuccess: (result) => {
       setReceipt(result);
       setPrinted(false);
@@ -159,6 +151,8 @@ export function PosScreen() {
   const add = (product: Product) => {
     setReceipt(null);
     setLines((current) => addProduct(current, product, newId));
+    // Keep the scanner focused so the next item can be scanned straight away.
+    searchRef.current?.focus();
   };
 
   const onSearchKey = async (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -227,7 +221,6 @@ export function PosScreen() {
         title={t('pos.title')}
         actions={
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={online ? 'success' : 'destructive'}>{online ? t('pos.online') : t('pos.offline')}</Badge>
             <NativeSelect value={branchId} onChange={(e) => setBranchId(e.target.value)} aria-label={t('pos.branch')} className="w-auto">
               {membership.branches.map((b) => (
                 <option key={b.id} value={b.id}>{locale === 'ar' ? b.nameAr : b.nameEn} ({b.code})</option>
@@ -263,7 +256,7 @@ export function PosScreen() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
+        <div className="grid grid-cols-1 gap-4 pb-28 md:pb-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,0.9fr)]">
           {/* Product search */}
           <section aria-label={t('pos.search')} className="space-y-3">
             <div className="relative">
@@ -273,6 +266,7 @@ export function PosScreen() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={onSearchKey}
+                ref={searchRef}
                 placeholder={t('pos.search_placeholder')}
                 aria-label={t('pos.search')}
                 className="ps-9"
@@ -411,7 +405,7 @@ export function PosScreen() {
           </section>
 
           {/* Totals and payment */}
-          <section aria-label={t('pos.payment')} className="space-y-3">
+          <section id="pos-payment" aria-label={t('pos.payment')} className="space-y-3">
             <Card>
               <CardContent className="space-y-2 p-4 text-sm">
                 <Row label={t('pos.subtotal')} value={fmt.money(totals?.net ?? 0)} />
@@ -473,8 +467,8 @@ export function PosScreen() {
               </ul>
             ) : null}
 
-            {/* Sticky on small screens so the checkout button stays in reach */}
-            <div className="sticky bottom-0 -mx-4 border-t border-border bg-background/95 p-4 backdrop-blur lg:static lg:mx-0 lg:border-0 lg:bg-transparent lg:p-0">
+            <div className="pt-2">
+              <WriteHint />
               <Button
                 className="w-full"
                 size="lg"
@@ -487,6 +481,19 @@ export function PosScreen() {
           </section>
         </div>
       )}
+
+      {/* Phones: the total and the way to payment stay above the navigation bar while the cart is open. */}
+      {!receipt && lines.length > 0 ? (
+        <div className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 border-t border-border bg-background/95 px-4 py-2 backdrop-blur md:hidden">
+          <div className="min-w-0 text-sm">
+            <div className="text-muted-foreground">{t('pos.items_count', { count: fmt.number(lines.length) })}</div>
+            <div className="font-semibold tabular-nums">{fmt.money(gross)}</div>
+          </div>
+          <Button onClick={() => document.getElementById('pos-payment')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+            {t('pos.review_pay')}
+          </Button>
+        </div>
+      ) : null}
 
       <Card className="mt-6">
         <CardHeader>

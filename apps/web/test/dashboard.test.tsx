@@ -1,8 +1,14 @@
-import { screen } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { AppShell } from '@/components/app-shell';
 import { Dashboard } from '@/features/dashboard/dashboard';
 import { fakeServices, renderWithProviders } from './helpers';
+
+// The desktop sidebar and the phone bottom bar both render links; these tests check the sidebar.
+async function sidebar() {
+  await waitFor(() => expect(document.querySelector('aside')).not.toBeNull());
+  return within(document.querySelector('aside') as HTMLElement);
+}
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
@@ -13,11 +19,6 @@ vi.mock('next/navigation', () => ({
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children: React.ReactNode } & React.AnchorHTMLAttributes<HTMLAnchorElement>) =>
     <a href={href} {...rest}>{children}</a>,
-}));
-
-vi.mock('@/providers/sync-provider', () => ({
-  SyncProvider: ({ children }: { children: React.ReactNode }) => children,
-  useSync: () => ({ ready: false }),
 }));
 
 describe('dashboard', () => {
@@ -44,16 +45,31 @@ describe('dashboard', () => {
 });
 
 describe('navigation shell', () => {
+  it('a cashier sees the POS / Sales link (cashiers hold sales.read and sales.create)', async () => {
+    renderWithProviders(<AppShell><div>content</div></AppShell>, { services: fakeServices({ role: 'cashier' }) });
+    const pos = (await (await sidebar()).findByText('POS / Sales')).closest('a');
+    expect(pos).toHaveAttribute('href', '/pos/');
+  });
+
+  it('a role without sales.read does not see the POS link (accountant has it; storekeeper does not)', async () => {
+    renderWithProviders(<AppShell><div>content</div></AppShell>, { services: fakeServices({ role: 'storekeeper' }) });
+    (await sidebar()).getByText('Products');
+    expect((await sidebar()).queryByText('POS / Sales')).not.toBeInTheDocument();
+  });
+
   it('links live modules and shows unbuilt modules as disabled, not clickable', async () => {
     renderWithProviders(<AppShell><div>content</div></AppShell>, { services: fakeServices() });
-    const dashboardLink = (await screen.findByText('Dashboard')).closest('a');
+    const dashboardLink = (await sidebar()).getByText('Dashboard').closest('a');
     expect(dashboardLink).toHaveAttribute('href', '/dashboard/');
     // POS is live for roles with sales.read (Phase 3); the remaining planned modules stay disabled.
-    const pos = screen.getByText('POS / Sales');
+    const side = await sidebar();
+    const pos = side.getByText('POS / Sales');
     expect(pos.closest('a')).toHaveAttribute('href', '/pos/');
-    const purchase = screen.getByText('Purchase');
+    // Purchase orders are live now; Customers is still a planned module.
+    const purchase = side.getByText('Customers');
     expect(purchase.closest('a')).toBeNull();
     expect(purchase.closest('[aria-disabled="true"]')).not.toBeNull();
-    expect(screen.getAllByText('Soon').length).toBeGreaterThanOrEqual(10);
+    // Suppliers and purchase orders are live; eight planned modules are still shown as Soon.
+    expect(screen.getAllByText('Soon').length).toBeGreaterThanOrEqual(8);
   });
 });

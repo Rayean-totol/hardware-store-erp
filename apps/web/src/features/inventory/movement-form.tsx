@@ -9,7 +9,7 @@ import {
   type MovementType,
   type StockReason,
 } from '@erp/domain';
-import type { CachedProduct, Product } from '@erp/data';
+import { DataError, type MovementPayload, type Product, type StockLevel } from '@erp/data';
 import { localName, type Locale } from '@erp/i18n';
 import { Alert, Button, Card, CardContent, Field, Input, NativeSelect, Textarea } from '@erp/ui';
 import { useQuery } from '@tanstack/react-query';
@@ -17,21 +17,32 @@ import { Search } from 'lucide-react';
 import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
 import { PageHeader } from '@/components/page-header';
+import { WriteHint } from '@/components/write-hint';
+import { getDeviceId } from '@/lib/storage';
+import { useConnection } from '@/providers/connection-provider';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
-import { useSession } from '@/providers/session-provider';
-import { useSync } from '@/providers/sync-provider';
+import { useMembership, useSession } from '@/providers/session-provider';
 import { useUnits } from '../products/use-catalog-data';
 import { useWarehouses } from './use-warehouses';
 
 const isType = (v: string | null): v is MovementType => v === 'stock_in' || v === 'stock_out' || v === 'adjustment';
 
+/** Idempotency key for one distinct submission. A retry of the same entry reuses it; any change gets a new one. */
+interface Attempt {
+  key: string;
+  fingerprint: string;
+  occurredAt: string;
+}
+
 export function MovementForm({ initialType }: { initialType: string | null }) {
   const { t, fmt, locale, tMaybe } = useI18n();
   const { membership, can } = useSession();
-  const { catalog } = useServices();
-  const sync = useSync();
+  const { catalog, inventory } = useServices();
+  const { writable, state } = useConnection();
+  const orgId = useMembership().orgId;
   const scanRef = React.useRef<HTMLInputElement>(null);
+  const attemptRef = React.useRef<Attempt | null>(null);
 
   const allowedTypes = (['stock_in', 'stock_out', 'adjustment'] as const).filter((tp) =>
     tp === 'adjustment' ? can('inventory.adjust') : can('inventory.move'));
@@ -49,7 +60,7 @@ export function MovementForm({ initialType }: { initialType: string | null }) {
   const wh = warehouseId || warehouses.data?.[0]?.id || '';
 
   const [scan, setScan] = React.useState('');
-  const [product, setProduct] = React.useState<CachedProduct | null>(null);
+  const [product, setProduct] = React.useState<Product | null>(null);
   const [candidates, setCandidates] = React.useState<Product[]>([]);
   const [lookupMessage, setLookupMessage] = React.useState<string | null>(null);
   const [unitId, setUnitId] = React.useState('');
@@ -61,67 +72,59 @@ export function MovementForm({ initialType }: { initialType: string | null }) {
   const [issues, setIssues] = React.useState<string[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<unknown>(null);
-  const [result, setResult] = React.useState<{ text: string; warn: boolean } | null>(null);
+  const [result, setResult] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     scanRef.current?.focus();
   }, []);
 
+  // Current stock for the preview. Read from the server only; nothing is kept on the device.
+  const levels = useQuery({
+    queryKey: ['stock-levels', wh],
+    enabled: Boolean(wh && product),
+    queryFn: () => inventory.listStockLevels(wh),
+  });
+  const level: StockLevel | undefined = levels.data?.find((l) => l.productId === product?.id);
+
   async function lookup(code: string) {
     const value = code.trim();
-    if (!value || !sync.engine) return;
+    if (!value) return;
     setLookupMessage(null);
     setCandidates([]);
-    const local = await sync.engine.findProduct(value);
-    if (local) {
-      choose(local);
+    if (!writable && state !== 'online') {
+      // Searching is a read; without a server answer we cannot tell what exists.
+      setLookupMessage(t('movement.not_found_offline'));
       return;
     }
-    if (sync.online) {
-      try {
-        const page = await catalog.searchProducts({ orgId: membership!.orgId, search: value, limit: 8, offset: 0 });
-        if (page.items.length === 1) {
-          const cached = await sync.engine.getProduct(page.items[0]!.id);
-          if (cached) return choose(cached);
-        }
-        setCandidates(page.items);
-        setLookupMessage(page.items.length === 0 ? t('movement.not_found') : t('movement.pick_one'));
-        return;
-      } catch (err) {
-        setError(err);
-        return;
-      }
+    try {
+      const page = await catalog.searchProducts({ orgId, search: value, limit: 8, offset: 0 });
+      const exact = page.items.find((p) => p.sku.toLowerCase() === value.toLowerCase() || p.units.some((u) => u.barcode === value));
+      if (exact) return choose(exact);
+      if (page.items.length === 1) return choose(page.items[0]!);
+      setCandidates(page.items);
+      setLookupMessage(page.items.length === 0 ? t('movement.not_found') : t('movement.pick_one'));
+    } catch (err) {
+      setError(err);
     }
-    setLookupMessage(t('movement.not_found_offline'));
   }
 
-  function choose(p: CachedProduct) {
+  function choose(p: Product) {
     setProduct(p);
     setCandidates([]);
     setScan('');
     setLookupMessage(null);
-    const base = p.units.find((u) => u.factor === '1') ?? p.units[0];
+    const base = p.units.find((u) => u.isBase) ?? p.units[0];
     setUnitId(base?.unitId ?? '');
     setQuantity('');
     setResult(null);
     setError(null);
+    scanRef.current?.focus();
   }
-
-  // Projection of the chosen product for the preview; uses the same rules as the server.
-  const projection = useQuery({
-    queryKey: ['preview', wh, product?.id, sync.status?.pending ?? 0],
-    enabled: Boolean(sync.engine && wh && product),
-    queryFn: async () => {
-      const levels = await sync.engine!.projectedLevels(wh);
-      const level = levels.find((l) => l.productId === product!.id);
-      return { quantity: level?.quantity.toString() ?? '0', averageCost: level?.averageCost.toString() ?? '0' };
-    },
-  });
 
   const unit = product?.units.find((u) => u.unitId === unitId);
   const baseUnitLabel = product ? unitName(product.baseUnitId) : '';
   const previewBalance = React.useMemo(() => {
-    if (!product || !unit || !projection.data || !quantity.trim()) return null;
+    if (!product || !unit || !level || !quantity.trim()) return null;
     try {
       const qty = dec(quantity).abs();
       const change = type === 'stock_out' ? qty.times(unit.factor).negated()
@@ -129,21 +132,25 @@ export function MovementForm({ initialType }: { initialType: string | null }) {
           : dec(quantity).times(unit.factor);
       const cost = type === 'stock_in' && unitCost.trim() ? dec(unitCost).dividedBy(dec(unit.factor)) : null;
       const r = applyStockChange(
-        { quantity: dec(projection.data.quantity), averageCost: dec(projection.data.averageCost) },
+        { quantity: dec(level.quantity), averageCost: dec(level.averageCost) },
         change, cost, { allowNegative: true },
       );
       return { balance: r.state.quantity.toString(), negative: r.state.quantity.isNegative() };
     } catch {
       return null;
     }
-  }, [product, unit, projection.data, quantity, unitCost, type]);
+  }, [product, unit, level, quantity, unitCost, type]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setResult(null);
-    if (!product || !sync.engine) {
+    if (!product) {
       setIssues([t('movement.choose_product')]);
+      return;
+    }
+    if (!writable) {
+      setError(new DataError('offline.writes_disabled', 'offline'));
       return;
     }
     const found = validateStockMovementInput({
@@ -155,34 +162,40 @@ export function MovementForm({ initialType }: { initialType: string | null }) {
     setIssues(found.map((code) => tMaybe(`issues.${code}`) ?? code));
     if (found.length > 0) return;
 
+    const content: Omit<MovementPayload, 'clientId' | 'occurredAt'> = {
+      warehouseId: wh,
+      productId: product.id,
+      unitId,
+      movementType: type,
+      quantity,
+      unitCost: type === 'stock_in' ? unitCost : null,
+      reasonCode: reason || null,
+      note: note.trim() || null,
+      reference: reference.trim() || null,
+    };
+    // Same content = same submission: a retry keeps the key and the time, so the server cannot record it twice.
+    const fingerprint = JSON.stringify(content);
+    if (!attemptRef.current || attemptRef.current.fingerprint !== fingerprint) {
+      attemptRef.current = { key: crypto.randomUUID(), fingerprint, occurredAt: new Date().toISOString() };
+    }
+    const attempt = attemptRef.current;
+
     setBusy(true);
     try {
-      const entry = await sync.engine.enqueue({
-        warehouseId: wh,
-        productId: product.id,
-        unitId,
-        movementType: type,
-        quantity,
-        unitCost: type === 'stock_in' ? unitCost : null,
-        reasonCode: reason || null,
-        note: note.trim() || null,
-        reference: reference.trim() || null,
-      });
-      const report = await sync.flush();
-      const after = (await sync.engine.queued()).find((q) => q.id === entry.id);
-      if (after?.status === 'failed') {
-        setError(new Error(after.lastError?.message ?? after.lastError?.code ?? 'rejected'));
-        setResult({ text: t('movement.rejected_kept'), warn: true });
-      } else if (report?.networkError || !sync.online) {
-        setResult({ text: t('movement.queued'), warn: false });
-      } else {
-        setResult({ text: t('movement.saved'), warn: false });
+      const [outcome] = await inventory.applyMovements(orgId, getDeviceId(), [{ ...content, clientId: attempt.key, occurredAt: attempt.occurredAt }]);
+      if (!outcome) throw new DataError('unknown', 'no result from the server');
+      if (outcome.status === 'rejected') {
+        setError(new DataError(outcome.code ?? 'unknown', outcome.message ?? 'rejected', outcome.detail));
+        return;
       }
+      attemptRef.current = null;
+      setResult(outcome.status === 'duplicate' ? t('movement.already_saved') : t('movement.saved'));
       setQuantity('');
       setUnitCost('');
       setNote('');
       setReference('');
       setIssues([]);
+      void levels.refetch();
       scanRef.current?.focus();
     } catch (err) {
       setError(err);
@@ -216,14 +229,14 @@ export function MovementForm({ initialType }: { initialType: string | null }) {
         ))}
       </div>
 
-      {!sync.ready ? <Alert variant="info">{t('common.loading')}</Alert> : null}
+      {!writable ? <Alert variant="warning">{t('connection.offline_banner')}</Alert> : null}
       {error ? <ErrorAlert error={error} /> : null}
-      {result ? <Alert variant={result.warn ? 'warning' : 'success'}>{result.text}</Alert> : null}
+      {result ? <Alert variant="success">{result}</Alert> : null}
       {issues.length > 0 ? <Alert variant="destructive"><ul className="list-disc ps-5">{issues.map((i) => <li key={i}>{i}</li>)}</ul></Alert> : null}
 
-      <form onSubmit={submit} noValidate className="grid gap-4 lg:grid-cols-2">
+      <form onSubmit={submit} noValidate className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card className="lg:col-span-2">
-          <CardContent className="grid gap-4 pt-5 md:grid-cols-2">
+          <CardContent className="grid grid-cols-1 gap-4 pt-5 md:grid-cols-2">
             <Field label={t('inventory.warehouse')} required>
               {(p) => (
                 <NativeSelect {...p} value={wh} onChange={(e) => setWarehouseId(e.target.value)}>
@@ -257,13 +270,7 @@ export function MovementForm({ initialType }: { initialType: string | null }) {
               <ul className="flex flex-col gap-1">
                 {candidates.map((c) => (
                   <li key={c.id}>
-                    <Button type="button" variant="ghost" className="w-full justify-start" onClick={() => {
-                      void (async () => {
-                        const cached = await sync.engine?.getProduct(c.id);
-                        if (cached) choose(cached);
-                        else setLookupMessage(t('movement.not_found_offline'));
-                      })();
-                    }}>
+                    <Button type="button" variant="ghost" className="min-h-11 w-full justify-start" onClick={() => choose(c)}>
                       <span dir="ltr" className="font-mono text-xs">{c.sku}</span>
                       <span className="ms-2">{localName({ nameEn: c.nameEn, nameAr: c.nameAr, nameBn: c.nameBn }, locale as Locale)}</span>
                     </Button>
@@ -276,13 +283,13 @@ export function MovementForm({ initialType }: { initialType: string | null }) {
 
         {product ? (
           <Card className="lg:col-span-2">
-            <CardContent className="grid gap-4 pt-5 md:grid-cols-2">
+            <CardContent className="grid grid-cols-1 gap-4 pt-5 md:grid-cols-2">
               <div className="md:col-span-2">
                 <p className="font-medium">{localName({ nameEn: product.nameEn, nameAr: product.nameAr, nameBn: product.nameBn }, locale as Locale)}</p>
                 <p dir="ltr" className="font-mono text-xs text-muted-foreground">{product.sku}</p>
-                {projection.data ? (
+                {level ? (
                   <p className="mt-1 text-sm">
-                    {t('movement.on_hand_now', { qty: fmt.number(projection.data.quantity), unit: baseUnitLabel })}
+                    {t('movement.on_hand_now', { qty: fmt.number(level.quantity), unit: baseUnitLabel })}
                   </p>
                 ) : null}
               </div>
@@ -325,8 +332,11 @@ export function MovementForm({ initialType }: { initialType: string | null }) {
                   {previewBalance.negative ? ` ${t('movement.preview_negative')}` : ''}
                 </p>
               ) : null}
-              <div className="md:col-span-2 flex gap-2">
-                <Button type="submit" disabled={busy || !sync.ready}>{busy ? t('common.saving') : t('movement.record')}</Button>
+              <div className="md:col-span-2 flex flex-col gap-2">
+                <WriteHint />
+                <div className="flex gap-2">
+                  <Button type="submit" disabled={busy || !writable}>{busy ? t('common.saving') : t('movement.record')}</Button>
+                </div>
               </div>
             </CardContent>
           </Card>

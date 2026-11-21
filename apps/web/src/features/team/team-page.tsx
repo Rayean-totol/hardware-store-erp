@@ -26,8 +26,10 @@ import { PageHeader } from '@/components/page-header';
 import { useI18n } from '@/providers/i18n-provider';
 import { useServices } from '@/providers/services-provider';
 import { useMembership, useSession } from '@/providers/session-provider';
+import { useConnection } from '@/providers/connection-provider';
 
 export function TeamPage() {
+  const { writable } = useConnection();
   const { t } = useI18n();
   const { org } = useServices();
   const { orgId, role: myRole } = useMembership();
@@ -118,7 +120,7 @@ export function TeamPage() {
                   </NativeSelect>
                 )}
               </Field>
-              <Button type="submit" disabled={add.isPending} className="mb-5">{t('team.add')}</Button>
+              <Button type="submit" disabled={add.isPending || !writable} className="mb-5">{t('team.add')}</Button>
             </form>
           </CardContent>
         </Card>
