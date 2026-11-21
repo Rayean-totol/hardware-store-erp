@@ -131,3 +131,34 @@ describe('navigation', () => {
     expect(screen.queryByRole('link', { name: 'Suppliers' })).not.toBeInTheDocument();
   });
 });
+
+describe('opening balance lock in the UI', () => {
+  it('a locked supplier shows the opening balance as read-only and does not send it on save', async () => {
+    const services = fakeServices();
+    (services.suppliers.get as unknown as { mockResolvedValue: (v: unknown) => void }).mockResolvedValue({ ...SUPPLIERS[0]!, openingBalanceLocked: true, currentBalance: '1600.50' });
+    renderWithProviders(<SupplierForm supplierId={NAJD.id} />, { services });
+    const opening = await screen.findByLabelText(/Opening balance/);
+    expect(opening).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Save supplier' }));
+    await waitFor(() => expect(services.suppliers.save).toHaveBeenCalled());
+    const input = (services.suppliers.save as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]![1] as Record<string, unknown>;
+    expect(input).not.toHaveProperty('openingBalance');
+  });
+
+  it('an owner posts an adjustment with the amount and reason, and sees the new balance', async () => {
+    const services = fakeServices();
+    renderWithProviders(<SupplierProfile supplierId={NAJD.id} />, { services });
+    await userEvent.type(await screen.findByLabelText(/Amount \(SAR/), '-50.00');
+    await userEvent.type(screen.getByLabelText(/Reason/), 'Supplier credit note confirmed');
+    await userEvent.click(screen.getByRole('button', { name: 'Post adjustment' }));
+    await waitFor(() => expect(services.suppliers.adjustBalance).toHaveBeenCalledWith(ORG, NAJD.id, expect.any(String), '-50.00', 'Supplier credit note confirmed'));
+    expect(await screen.findByText(/Adjustment posted. New balance: .*1,450\.50/)).toBeInTheDocument();
+  });
+
+  it('a storekeeper sees no adjustment panel', async () => {
+    renderWithProviders(<SupplierProfile supplierId={NAJD.id} />, { services: fakeServices({ role: 'storekeeper' }) });
+    await screen.findAllByText('Najd Fasteners');
+    expect(screen.queryByText('Balance adjustment')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Post adjustment' })).not.toBeInTheDocument();
+  });
+});

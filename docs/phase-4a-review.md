@@ -59,3 +59,20 @@ Status: the migration is a candidate for production review. It is **not yet prod
 | Lint, typecheck, production build | pass |
 | Install on a fresh database | applied twice without error; verification Part 1 all TRUE; Part 2 all 0 |
 | Original reproduction probes | all five findings now behave correctly |
+
+## 7. Opening balance lock (approved conditions, implemented)
+
+| Condition | How it is met |
+| --- | --- |
+| Edit the opening balance before any financial activity | `save_supplier` changes it while the supplier has no `supplier_ledger_entries` row. The profile reports `opening_balance_locked: false`. |
+| Lock permanently after the first posted purchase, payment or adjustment | `app.supplier_locked(supplier)` is true once any ledger entry exists. `save_supplier` refuses a changed value with `supplier.opening_locked`. The ledger is append-only (update, delete and truncate refused for everyone), so the lock cannot be undone. |
+| Corrections only through authorised, auditable adjustments | `post_supplier_adjustment`: needs `suppliers.adjust` (owner, admin, manager), a reason of 5–300 characters, a non-zero signed amount with at most two decimals, a supplier of the caller's organisation, and an idempotency key. Each entry is written to `audit_log`. The UI shows the new balance. |
+| Nothing else changes | Only additive objects: the ledger table, the new permission and role grants, two helper functions and one public function. No existing table, row or policy is altered. |
+
+Notes:
+
+- Phases 4C and 4D post financial events by inserting into `supplier_ledger_entries` through their own functions. Those functions must lock the supplier row first (`suppliers ... for update`), as `post_supplier_adjustment` does, so the lock check and the posting cannot race. This is a requirement for 4C and 4D and is stated in the migration.
+- Balances are calculated (`opening_balance` plus the sum of entries), never stored and never edited on the client. The balance is shown only to users with `suppliers.manage`.
+- Read-only verification (Part 1) now has 29 rows, all TRUE after installation. Part 2 reports 7 counts, all 0.
+
+Tests for this section: database 223 pass (60 supplier tests, 9 of them for the lock and adjustments); concurrency 6 pass; API 14 + 7 pass; unit i18n 15, domain 110, ui 4, data 75, web 81 pass; lint, typecheck and production build pass.

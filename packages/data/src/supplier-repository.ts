@@ -31,6 +31,10 @@ export interface Supplier {
   bankName?: string | null;
   bankAccountName?: string | null;
   iban?: string | null;
+  /** True once any financial event exists: the opening balance can no longer be edited. */
+  openingBalanceLocked?: boolean;
+  /** Opening balance plus all ledger entries (decimal text). */
+  currentBalance?: string;
 }
 
 export type SupplierStatusFilter = 'active' | 'inactive' | 'all';
@@ -82,10 +86,18 @@ export interface SupplierSaveResult {
   rowVersion: number;
 }
 
+export interface SupplierAdjustmentResult {
+  status: 'created' | 'duplicate';
+  entryId: string;
+  balance: string;
+}
+
 export interface SupplierRepository {
   list(query: SupplierListQuery): Promise<SupplierListPage>;
   get(orgId: string, supplierId: string): Promise<Supplier>;
   save(orgId: string, input: SupplierInput, expectedVersion: number | null): Promise<SupplierSaveResult>;
+  /** Posts an audited balance adjustment (a signed amount with a reason). Idempotent by clientId. */
+  adjustBalance(orgId: string, supplierId: string, clientId: string, amount: string, reason: string): Promise<SupplierAdjustmentResult>;
 }
 
 interface RawSupplier {
@@ -94,6 +106,7 @@ interface RawSupplier {
   country_code: string; vat_number?: string; cr_number?: string; payment_terms_days?: number; default_currency: string;
   notes?: string; is_active: boolean; created_at: string; updated_at: string; row_version: number;
   opening_balance?: string; credit_limit?: string; bank_name?: string; bank_account_name?: string; iban?: string;
+  opening_balance_locked?: boolean; current_balance?: string;
 }
 
 export function mapSupplier(r: RawSupplier): Supplier {
@@ -127,6 +140,8 @@ export function mapSupplier(r: RawSupplier): Supplier {
     s.bankName = r.bank_name ?? null;
     s.bankAccountName = r.bank_account_name ?? null;
     s.iban = r.iban ?? null;
+    s.openingBalanceLocked = r.opening_balance_locked ?? false;
+    s.currentBalance = r.current_balance;
   }
   return s;
 }
@@ -170,6 +185,19 @@ export function createSupabaseSupplierRepository(db: DbClient): SupplierReposito
     async get(orgId, supplierId) {
       const raw = unwrap(await db.rpc('get_supplier', { p_org_id: orgId, p_supplier_id: supplierId })) as unknown as RawSupplier;
       return mapSupplier(raw);
+    },
+
+    async adjustBalance(orgId, supplierId, clientId, amount, reason) {
+      const raw = unwrap(
+        await db.rpc('post_supplier_adjustment', {
+          p_org_id: orgId,
+          p_client_id: clientId,
+          p_supplier_id: supplierId,
+          p_amount: amount.trim(),
+          p_reason: reason.trim(),
+        }),
+      ) as unknown as { status: SupplierAdjustmentResult['status']; entry_id: string; balance: string };
+      return { status: raw.status, entryId: raw.entry_id, balance: raw.balance };
     },
 
     async save(orgId, input, expectedVersion) {

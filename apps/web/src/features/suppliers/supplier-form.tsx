@@ -65,6 +65,8 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
   if (existing.error) return <ErrorAlert error={existing.error} onRetry={() => void existing.refetch()} />;
 
   const title = supplierId ? t('supplier.title_edit') : t('supplier.title_new');
+  // Once a financial event exists, the opening balance is locked: it is shown but not sent or edited.
+  const locked = Boolean(existing.data?.openingBalanceLocked);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -87,7 +89,8 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
         city: form.city, countryCode: form.countryCode, vatNumber: form.vatNumber, crNumber: form.crNumber,
         notes: form.notes, isActive: form.isActive,
         ...(canFinance ? {
-          openingBalance: form.openingBalance, creditLimit: form.creditLimit, paymentTermsDays: form.paymentTermsDays,
+          ...(locked ? {} : { openingBalance: form.openingBalance }),
+          creditLimit: form.creditLimit, paymentTermsDays: form.paymentTermsDays,
           bankName: form.bankName, bankAccountName: form.bankAccountName, iban: form.iban,
         } : {}),
       };
@@ -163,7 +166,7 @@ export function SupplierForm({ supplierId }: { supplierId: string | null }) {
             <CardHeader><CardTitle className="text-base">{t('supplier.section_financial')}</CardTitle></CardHeader>
             <CardContent className="grid gap-3">
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label={t('supplier.field_opening_balance')} id="s-opening" hint={t('supplier.hint_opening')}>{(p) => (<Input {...p} value={form.openingBalance} onChange={(e) => set('openingBalance')(e.target.value)} inputMode="decimal" dir="ltr" />)}</Field>
+                <Field label={t('supplier.field_opening_balance')} id="s-opening" hint={locked ? t('supplier.opening_locked_hint') : t('supplier.hint_opening')}>{(p) => (<Input {...p} disabled={locked} value={form.openingBalance} onChange={(e) => set('openingBalance')(e.target.value)} inputMode="decimal" dir="ltr" />)}</Field>
                 <Field label={t('supplier.field_credit_limit')} id="s-credit" optionalLabel={t('common.optional')}>{(p) => (<Input {...p} value={form.creditLimit} onChange={(e) => set('creditLimit')(e.target.value)} inputMode="decimal" dir="ltr" />)}</Field>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">

@@ -53,6 +53,7 @@ export const SUPPLIERS: Supplier[] = [
     countryCode: 'SA', vatNumber: null, crNumber: null, paymentTermsDays: 30, defaultCurrency: 'SAR', notes: null, isActive: true,
     createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-20T00:00:00Z', rowVersion: 3,
     openingBalance: '1500.50', creditLimit: '20000.00', bankName: 'Al Rajhi', bankAccountName: 'Najd', iban: 'SA0380000000608010167519',
+    openingBalanceLocked: false, currentBalance: '1500.50',
   },
 ];
 
@@ -140,13 +141,14 @@ export function fakeServices(opts: { role?: SystemRole; products?: Product[] } =
   const canManageSuppliers = ROLE_PERMISSIONS[opts.role ?? 'owner'].includes('suppliers.manage');
   const visible = (s: Supplier): Supplier => {
     if (canManageSuppliers) return s;
-    const { openingBalance: _o, creditLimit: _c, bankName: _b, bankAccountName: _a, iban: _i, ...rest } = s;
+    const { openingBalance: _o, creditLimit: _c, bankName: _b, bankAccountName: _a, iban: _i, openingBalanceLocked: _l, currentBalance: _cb, ...rest } = s;
     return rest;
   };
   const suppliers: SupplierRepository = {
     list: vi.fn(async () => ({ items: SUPPLIERS.map(visible), total: SUPPLIERS.length, limit: 25, offset: 0 })),
     get: vi.fn(async (_org, id) => visible(SUPPLIERS.find((s) => s.id === id) ?? SUPPLIERS[0]!)),
     save: vi.fn(async () => ({ id: 'supplier-new', supplierNo: 'SUP-000002', rowVersion: 1 })),
+    adjustBalance: vi.fn(async () => ({ status: 'created' as const, entryId: 'entry-1', balance: '1450.50' })),
   };
   const productImages: ProductImageStore = {
     upload: vi.fn(async () => 'org/product/x.jpg'),

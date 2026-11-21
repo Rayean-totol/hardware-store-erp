@@ -37,6 +37,7 @@ const MATRIX: Record<string, string[]> = {
   // Phase 4A (suppliers). Read and written only through the security-definer functions.
   suppliers: [],
   supplier_counters: [],
+  supplier_ledger_entries: [],
 };
 const PRIVILEGES = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'] as const;
 
@@ -60,6 +61,7 @@ const PUBLIC_RPCS = [
   'list_suppliers(uuid,text,text,integer,integer)',
   'get_supplier(uuid,uuid)',
   'save_supplier(uuid,jsonb,bigint)',
+  'post_supplier_adjustment(uuid,uuid,uuid,text,text)',
 ];
 
 describe('table privileges match the least-privilege matrix', () => {

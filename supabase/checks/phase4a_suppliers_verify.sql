@@ -1,6 +1,6 @@
 -- =============================================================================
 -- READ-ONLY verification for Phase 4A (migration 20261125000100_suppliers.sql, v2).
--- Changes nothing. Run in the Supabase SQL editor.
+-- Changes nothing. Run in the Supabase SQL editor. Run AFTER the migration; before it, Part 1 is expected to show FALSE.
 -- Part 1: installation and security. Every row should show TRUE.
 -- Part 2: data quality. Every count should be 0 (it reports rows; it changes nothing).
 -- =============================================================================
@@ -44,7 +44,20 @@ from (values
   ('owner holds suppliers.manage',                  exists (select 1 from public.role_permissions rp join public.roles r on r.id = rp.role_id where r.is_system and r.code = 'owner' and rp.permission_code = 'suppliers.manage')),
   ('cashier holds no supplier permission',          not exists (select 1 from public.role_permissions rp join public.roles r on r.id = rp.role_id where r.is_system and r.code = 'cashier' and rp.permission_code like 'suppliers.%')),
   ('audit trigger on suppliers',                    exists (select 1 from pg_trigger where tgname = 'suppliers_audit')),
-  ('touch trigger on suppliers',                    exists (select 1 from pg_trigger where tgname = 'suppliers_touch'))
+  ('touch trigger on suppliers',                    exists (select 1 from pg_trigger where tgname = 'suppliers_touch')),
+  ('table public.supplier_ledger_entries exists',   to_regclass('public.supplier_ledger_entries') is not null),
+  ('ledger: row-level security enabled',            coalesce((select c.relrowsecurity from pg_class c where c.oid = to_regclass('public.supplier_ledger_entries')), false)),
+  ('ledger: no privileges for signed-in or anonymous users', case when to_regclass('public.supplier_ledger_entries') is null then false
+        else not (has_table_privilege('authenticated', 'public.supplier_ledger_entries', 'SELECT') or has_table_privilege('authenticated', 'public.supplier_ledger_entries', 'INSERT')
+               or has_table_privilege('anon', 'public.supplier_ledger_entries', 'SELECT')) end),
+  ('ledger: append-only trigger present',           exists (select 1 from pg_trigger where tgname = 'supplier_ledger_no_update_delete')),
+  ('ledger: audit trigger present',                 exists (select 1 from pg_trigger where tgname = 'supplier_ledger_audit')),
+  ('post_supplier_adjustment: signed-in users may execute, anonymous may not', case when to_regprocedure('public.post_supplier_adjustment(uuid,uuid,uuid,text,text)') is null then false
+        else has_function_privilege('authenticated', 'public.post_supplier_adjustment(uuid,uuid,uuid,text,text)', 'EXECUTE')
+         and not has_function_privilege('anon', 'public.post_supplier_adjustment(uuid,uuid,uuid,text,text)', 'EXECUTE') end),
+  ('permission suppliers.adjust exists and is held by owner', exists (select 1 from public.permissions where code = 'suppliers.adjust')
+        and exists (select 1 from public.role_permissions rp join public.roles r on r.id = rp.role_id where r.is_system and r.code = 'owner' and rp.permission_code = 'suppliers.adjust')),
+  ('storekeeper and cashier hold no adjustment permission', not exists (select 1 from public.role_permissions rp join public.roles r on r.id = rp.role_id where r.is_system and r.code in ('storekeeper', 'cashier') and rp.permission_code = 'suppliers.adjust'))
 ) as checks(check_name, ok)
 order by check_name;
 

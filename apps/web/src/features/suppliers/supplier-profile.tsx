@@ -1,8 +1,9 @@
 'use client';
 
 import type { Supplier } from '@erp/data';
-import { Alert, Badge, Card, CardContent, CardHeader, CardTitle, Button, Spinner } from '@erp/ui';
-import { useQuery } from '@tanstack/react-query';
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, Spinner } from '@erp/ui';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import * as React from 'react';
 import { Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { ErrorAlert } from '@/components/error-message';
@@ -20,12 +21,67 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+/** Posts an audited balance adjustment. The idempotency key lives until a success, so a retry cannot post twice. */
+function AdjustBalance({ supplierId, onDone }: { supplierId: string; onDone: () => void }) {
+  const { t, fmt } = useI18n();
+  const { suppliers } = useServices();
+  const { orgId } = useMembership();
+  const [amount, setAmount] = React.useState('');
+  const [reason, setReason] = React.useState('');
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<unknown>(null);
+  const [busy, setBusy] = React.useState(false);
+  const clientId = React.useRef(crypto.randomUUID());
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const result = await suppliers.adjustBalance(orgId, supplierId, clientId.current, amount, reason);
+      clientId.current = crypto.randomUUID();
+      setMessage(t('supplier.adjusted', { balance: fmt.money(result.balance) }));
+      setAmount('');
+      setReason('');
+      onDone();
+    } catch (err) {
+      setError(err);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">{t('supplier.adjust_title')}</CardTitle></CardHeader>
+      <CardContent>
+        <form onSubmit={submit} className="grid gap-3" noValidate>
+          <p className="text-xs text-muted-foreground">{t('supplier.adjust_hint')}</p>
+          <Field label={t('supplier.adjust_amount')} id="adj-amount" required>
+            {(p) => <Input {...p} value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" dir="ltr" />}
+          </Field>
+          <Field label={t('supplier.adjust_reason')} id="adj-reason" required>
+            {(p) => <Input {...p} value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />}
+          </Field>
+          {message ? <Alert variant="success">{message}</Alert> : null}
+          {error ? <ErrorAlert error={error} /> : null}
+          <div className="flex justify-end">
+            <Button type="submit" disabled={busy}>{busy ? t('common.saving') : t('supplier.adjust_submit')}</Button>
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
 /** One supplier: details, financial terms (managers only) and the purchase and payment history. */
 export function SupplierProfile({ supplierId }: { supplierId: string }) {
   const { t, fmt, locale } = useI18n();
   const { suppliers } = useServices();
   const { orgId } = useMembership();
   const { can } = useSession();
+  const queryClient = useQueryClient();
   const profile = useQuery({
     queryKey: ['supplier', orgId, supplierId],
     queryFn: () => suppliers.get(orgId, supplierId),
@@ -93,6 +149,20 @@ export function SupplierProfile({ supplierId }: { supplierId: string }) {
                 <p className="mt-3 text-xs text-muted-foreground">{t('supplier.balance_pending')}</p>
               </CardContent>
             </Card>
+          ) : null}
+          {s.currentBalance !== undefined ? (
+            <Card>
+              <CardHeader><CardTitle className="text-base">{t('supplier.profile_balance')}</CardTitle></CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-2xl font-semibold tabular-nums">{fmt.money(s.currentBalance)}</span>
+                  {s.openingBalanceLocked ? <Badge variant="outline">{t('supplier.field_opening_locked')}</Badge> : null}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+          {can('suppliers.adjust') && s.currentBalance !== undefined ? (
+            <AdjustBalance supplierId={s.id} onDone={() => void queryClient.invalidateQueries({ queryKey: ['supplier', orgId, supplierId] })} />
           ) : null}
 
           {/* Purchase and payment history: real records arrive in Phases 4C and 4D. Nothing is shown as data yet. */}

@@ -25,6 +25,7 @@ export const PERMISSIONS = [
   'customers.manage',
   'suppliers.read',
   'suppliers.manage',
+  'suppliers.adjust',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -48,7 +49,7 @@ export const ROLE_PERMISSIONS: Record<SystemRole, readonly Permission[]> = {
     'audit.read', 'catalog.read', 'catalog.write', 'catalog.price_write', 'catalog.archive',
     'inventory.read', 'inventory.move', 'inventory.adjust',
     'sales.read', 'sales.create', 'sales.discount', 'sales.price_override', 'sales.credit', 'sales.void',
-    'customers.manage', 'suppliers.read', 'suppliers.manage',
+    'customers.manage', 'suppliers.read', 'suppliers.manage', 'suppliers.adjust',
   ],
   storekeeper: ['catalog.read', 'catalog.write', 'inventory.read', 'inventory.move', 'suppliers.read'],
   cashier: ['catalog.read', 'inventory.read', 'sales.read', 'sales.create'],

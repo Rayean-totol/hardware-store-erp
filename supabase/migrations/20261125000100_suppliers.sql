@@ -45,16 +45,17 @@ $$;
 -- -----------------------------------------------------------------------------
 insert into public.permissions (code, module, description) values
   ('suppliers.read',   'suppliers', 'View the supplier directory and profiles (financial fields need suppliers.manage)'),
-  ('suppliers.manage', 'suppliers', 'Create and edit suppliers, including opening balance, credit limit and bank details')
+  ('suppliers.manage', 'suppliers', 'Create and edit suppliers, including opening balance, credit limit and bank details'),
+  ('suppliers.adjust', 'suppliers', 'Post auditable balance adjustments to a supplier (locks the opening balance)')
 on conflict (code) do nothing;
 
 insert into public.role_permissions (role_id, permission_code)
 select r.id, v.code
 from public.roles r
 join (values
-  ('owner',       'suppliers.read'), ('owner',       'suppliers.manage'),
-  ('admin',       'suppliers.read'), ('admin',       'suppliers.manage'),
-  ('manager',     'suppliers.read'), ('manager',     'suppliers.manage'),
+  ('owner',       'suppliers.read'), ('owner',       'suppliers.manage'), ('owner',       'suppliers.adjust'),
+  ('admin',       'suppliers.read'), ('admin',       'suppliers.manage'), ('admin',       'suppliers.adjust'),
+  ('manager',     'suppliers.read'), ('manager',     'suppliers.manage'), ('manager',     'suppliers.adjust'),
   ('storekeeper', 'suppliers.read'),
   ('accountant',  'suppliers.read'),
   ('auditor',     'suppliers.read')
@@ -129,6 +130,48 @@ create trigger suppliers_audit after insert or update or delete on public.suppli
 -- No row-level policies are needed because the table has no grants for clients; RLS stays on
 -- as a second barrier, so any future grant still has to pass an organisation check.
 alter table public.suppliers enable row level security;
+
+-- 3b. Supplier ledger: every financial event for a supplier. Append-only. Phases 4C and 4D post
+-- here (purchase invoices, returns, payments, credit notes). An entry locks the opening balance.
+-- Corrections are new 'adjustment' entries, never edits.
+create table if not exists public.supplier_ledger_entries (
+  id          uuid primary key default gen_random_uuid(),
+  org_id      uuid not null references public.organizations (id) on delete restrict,
+  supplier_id uuid not null,
+  client_id   uuid not null,
+  entry_type  text not null check (entry_type in ('purchase_invoice', 'purchase_return', 'supplier_payment', 'credit_note', 'adjustment')),
+  -- Positive: we owe the supplier more. Negative: we owe less.
+  amount      numeric(18, 2) not null check (amount <> 0),
+  reason      text check (reason is null or length(btrim(reason)) between 5 and 300),
+  reference   text check (reference is null or length(reference) <= 64),
+  posted_by   uuid,
+  posted_at   timestamptz not null default now(),
+  constraint supplier_ledger_client_uq unique (org_id, client_id),
+  constraint supplier_ledger_adjustment_reason check (entry_type <> 'adjustment' or reason is not null),
+  foreign key (supplier_id, org_id) references public.suppliers (id, org_id) on delete restrict
+);
+create index if not exists supplier_ledger_supplier_idx on public.supplier_ledger_entries (supplier_id);
+alter table public.supplier_ledger_entries enable row level security;
+-- No policies and no grants: only the security-definer functions read or write it.
+
+create or replace function app.supplier_ledger_immutable()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
+begin
+  raise exception 'supplier ledger is append-only' using errcode = '42501', hint = 'supplier_ledger.immutable';
+end;
+$$;
+drop trigger if exists supplier_ledger_no_update_delete on public.supplier_ledger_entries;
+create trigger supplier_ledger_no_update_delete before update or delete on public.supplier_ledger_entries
+  for each row execute function app.supplier_ledger_immutable();
+drop trigger if exists supplier_ledger_no_truncate on public.supplier_ledger_entries;
+create trigger supplier_ledger_no_truncate before truncate on public.supplier_ledger_entries
+  for each statement execute function app.supplier_ledger_immutable();
+drop trigger if exists supplier_ledger_audit on public.supplier_ledger_entries;
+create trigger supplier_ledger_audit after insert on public.supplier_ledger_entries
+  for each row execute function app.audit_row_change();
 
 -- -----------------------------------------------------------------------------
 -- 4. Helpers (not callable by clients)
@@ -232,6 +275,29 @@ begin
 end;
 $$;
 
+-- Balance owed to a supplier: opening balance plus every ledger entry. Calculated, never stored.
+create or replace function app.supplier_balance(p_supplier_id uuid)
+returns numeric
+language sql
+stable
+set search_path = ''
+as $$
+  select s.opening_balance + coalesce((select sum(e.amount) from public.supplier_ledger_entries e where e.supplier_id = s.id), 0)
+  from public.suppliers s
+  where s.id = p_supplier_id;
+$$;
+
+-- True once any financial event exists for the supplier: the opening balance is then locked.
+-- Posting functions (4C/4D) must lock the supplier row before inserting, so this check is race-free.
+create or replace function app.supplier_locked(p_supplier_id uuid)
+returns boolean
+language sql
+stable
+set search_path = ''
+as $$
+  select exists (select 1 from public.supplier_ledger_entries e where e.supplier_id = p_supplier_id);
+$$;
+
 -- The supplier as JSON. Financial and bank fields are included only when p_manage is true.
 create or replace function app.supplier_json(s public.suppliers, p_manage boolean)
 returns jsonb
@@ -267,7 +333,9 @@ as $$
          'credit_limit', s.credit_limit::text,
          'bank_name', s.bank_name,
          'bank_account_name', s.bank_account_name,
-         'iban', s.iban)
+         'iban', s.iban,
+         'opening_balance_locked', app.supplier_locked(s.id),
+         'current_balance', app.supplier_balance(s.id)::text)
        else '{}'::jsonb end);
 $$;
 
@@ -450,6 +518,11 @@ begin
   v_terms   := nullif(btrim(coalesce(v_src->>'payment_terms_days', '')), '')::integer;
   v_active  := coalesce((v_src->>'is_active')::boolean, true);
 
+  -- The opening balance is editable until the first financial event, then locked for good.
+  if v_id is not null and v_opening is distinct from v_existing.opening_balance and app.supplier_locked(v_id) then
+    perform app.fail('supplier.opening_locked');
+  end if;
+
   if v_id is null then
     -- The counter row is locked, so numbers are gap-free per organisation and never repeat.
     insert into public.supplier_counters (org_id, last_value) values (p_org_id, 1)
@@ -517,11 +590,81 @@ end;
 $$;
 
 -- -----------------------------------------------------------------------------
+-- 7b. post_supplier_adjustment: an authorised, reasoned, auditable correction. Idempotent by client_id.
+-- Posting an adjustment is a financial event, so it also locks the opening balance.
+-- -----------------------------------------------------------------------------
+create or replace function public.post_supplier_adjustment(
+  p_org_id      uuid,
+  p_client_id   uuid,
+  p_supplier_id uuid,
+  p_amount      text,
+  p_reason      text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_existing public.supplier_ledger_entries%rowtype;
+  v_sup      public.suppliers%rowtype;
+  v_amount   numeric;
+  v_reason   text := btrim(coalesce(p_reason, ''));
+  v_row      public.supplier_ledger_entries%rowtype;
+begin
+  if not app.is_org_member(p_org_id) then
+    perform app.fail('forbidden', 'membership');
+  end if;
+  if not app.has_permission(p_org_id, 'suppliers.adjust') then
+    perform app.fail('forbidden', 'suppliers.adjust');
+  end if;
+  if p_client_id is null then
+    perform app.fail('validation', 'client_id');
+  end if;
+
+  -- Replay: return the stored adjustment, post nothing.
+  select * into v_existing from public.supplier_ledger_entries where org_id = p_org_id and client_id = p_client_id;
+  if found then
+    if v_existing.supplier_id is distinct from p_supplier_id then
+      perform app.fail('validation', 'client_id');
+    end if;
+    return jsonb_build_object('status', 'duplicate', 'entry_id', v_existing.id, 'balance', app.supplier_balance(p_supplier_id)::text);
+  end if;
+
+  -- Lock the supplier row: serialises concurrent postings and opening-balance edits.
+  select * into v_sup from public.suppliers where id = p_supplier_id and org_id = p_org_id for update;
+  if not found then
+    perform app.fail('supplier.not_found');
+  end if;
+
+  if p_amount is null or btrim(p_amount) !~ '^-?[0-9]{1,16}(\.[0-9]{1,2})?$' then
+    perform app.fail('supplier.amount_invalid');
+  end if;
+  v_amount := btrim(p_amount)::numeric;
+  if v_amount = 0 then
+    perform app.fail('supplier.amount_invalid');
+  end if;
+  if length(v_reason) < 5 or length(v_reason) > 300 then
+    perform app.fail('supplier.reason_required');
+  end if;
+
+  insert into public.supplier_ledger_entries (org_id, supplier_id, client_id, entry_type, amount, reason, posted_by)
+  values (p_org_id, p_supplier_id, p_client_id, 'adjustment', v_amount, v_reason, auth.uid())
+  returning * into v_row;
+
+  return jsonb_build_object('status', 'created', 'entry_id', v_row.id, 'balance', app.supplier_balance(p_supplier_id)::text);
+end;
+$$;
+
+-- -----------------------------------------------------------------------------
 -- 8. Privileges (least privilege; see docs/security.md)
 -- -----------------------------------------------------------------------------
-revoke all on public.suppliers, public.supplier_counters from public, anon, authenticated;
+revoke all on public.suppliers, public.supplier_counters, public.supplier_ledger_entries from public, anon, authenticated;
 
 revoke all on function app.iban_checksum_valid(text) from public, anon, authenticated;
+revoke all on function app.supplier_balance(uuid) from public, anon, authenticated;
+revoke all on function app.supplier_locked(uuid) from public, anon, authenticated;
+revoke all on function app.supplier_ledger_immutable() from public, anon, authenticated;
 revoke all on function app.supplier_issue(jsonb) from public, anon, authenticated;
 revoke all on function app.supplier_json(public.suppliers, boolean) from public, anon, authenticated;
 
@@ -532,7 +675,10 @@ grant execute on function public.get_supplier(uuid, uuid) to authenticated;
 revoke all on function public.save_supplier(uuid, jsonb, bigint) from public, anon;
 grant execute on function public.save_supplier(uuid, jsonb, bigint) to authenticated;
 
+revoke all on function public.post_supplier_adjustment(uuid, uuid, uuid, text, text) from public, anon;
+grant execute on function public.post_supplier_adjustment(uuid, uuid, uuid, text, text) to authenticated;
+
 notify pgrst, 'reload schema';
 
 -- Version marker (confirm with obj_description on public.suppliers)
-comment on table public.suppliers is 'Phase 4A supplier management, migration 20261125000100 (v2: partial-update merge, amount and IBAN checksum validation).';
+comment on table public.suppliers is 'Phase 4A supplier management, migration 20261125000100 (v3: opening balance lock, supplier ledger, adjustments).';

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { asAdmin, asUser, expectDbError, pool, type Sql } from '../db';
 import { DEMO_ORG, OTHER_ORG, USERS } from '../env';
@@ -383,6 +384,110 @@ describe('suppliers: roles and search', () => {
       expect(byNo.items.map((i: { supplier_code: string }) => i.supplier_code)).toContain('FIND-1');
       const byVat = (await sql(`select public.list_suppliers($1, '322222222222223', 'all', 50, 0) as r`, [DEMO_ORG])).rows[0].r;
       expect(byVat.items.map((i: { supplier_code: string }) => i.supplier_code)).toEqual(['FIND-1']);
+    });
+  });
+});
+
+/** Post a ledger entry as the migration owner (what Phases 4C/4D will do through their own functions). */
+async function postEntry(sql: Sql, supplierId: string, amount: string, type = 'purchase_invoice') {
+  await sql(
+    `insert into public.supplier_ledger_entries (org_id, supplier_id, client_id, entry_type, amount, reason)
+     values ($1, $2, $3, $4, $5, $6)`,
+    [DEMO_ORG, supplierId, randomUUID(), type, amount, type === 'adjustment' ? 'test entry' : null],
+  );
+}
+
+const adjust = (sql: Sql, supplierId: string, amount: string, reason = 'Keying correction', client = randomUUID()) =>
+  sql('select public.post_supplier_adjustment($1, $2, $3, $4, $5) as r', [DEMO_ORG, client, supplierId, amount, reason]);
+
+describe('suppliers: opening balance lock and adjustments', () => {
+  it('the opening balance is editable before any financial event, and the lock is reported as open', async () => {
+    await asOwner(async (sql) => {
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'LCK-OPEN', vat_number: null }))).rows[0].r as { id: string; row_version: number };
+      const v = (await save(sql, DEMO_ORG, { id: c.id, opening_balance: '2000.00' }, c.row_version)).rows[0].r as { row_version: number };
+      const p = (await sql('select public.get_supplier($1, $2) as r', [DEMO_ORG, c.id])).rows[0].r;
+      expect(p).toMatchObject({ opening_balance: '2000.00', opening_balance_locked: false, current_balance: '2000.00', row_version: v.row_version });
+    });
+  });
+
+  it('after the first financial event the opening balance cannot change, but re-sending the same value or editing other fields still works', async () => {
+    await asAdmin(async (sql) => {
+      await sql(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: USERS.owner, role: 'authenticated' })]);
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'LCK-1', vat_number: null }))).rows[0].r as { id: string; row_version: number };
+      await postEntry(sql, c.id, '300.00');
+      await refused(sql, () => save(sql, DEMO_ORG, { id: c.id, opening_balance: '999.00' }, c.row_version), 'supplier.opening_locked');
+      const same = (await save(sql, DEMO_ORG, { id: c.id, opening_balance: '1500.50', city: 'Abha' }, c.row_version)).rows[0].r as { row_version: number };
+      expect(same.row_version).toBe(c.row_version + 1);
+      const p = (await sql('select public.get_supplier($1, $2) as r', [DEMO_ORG, c.id])).rows[0].r;
+      expect(p).toMatchObject({ opening_balance: '1500.50', opening_balance_locked: true, current_balance: '1800.50' });
+    });
+  });
+
+  it('an owner corrects a locked balance with an adjustment; the balance moves and the entry is audited', async () => {
+    await asAdmin(async (sql) => {
+      await sql(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: USERS.owner, role: 'authenticated' })]);
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'LCK-ADJ', vat_number: null }))).rows[0].r as { id: string };
+      await sql(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: USERS.owner, role: 'authenticated' })]);
+      await postEntry(sql, c.id, '100.00');
+      const r = (await adjust(sql, c.id, '-50.25', 'Supplier credit confirmed')).rows[0].r as { status: string; balance: string };
+      expect(r).toMatchObject({ status: 'created', balance: '1550.25' }); // 1500.50 + 100.00 - 50.25
+      const { rows } = await sql(`select action from public.audit_log where table_name = 'supplier_ledger_entries' order by occurred_at`);
+      expect(rows.map((x) => x.action)).toEqual(expect.arrayContaining(['INSERT']));
+    });
+  });
+
+  it('a replayed adjustment with the same client id posts nothing new', async () => {
+    await asAdmin(async (sql) => {
+      await sql(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: USERS.owner, role: 'authenticated' })]);
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'LCK-REPLAY', vat_number: null }))).rows[0].r as { id: string };
+      const client = randomUUID();
+      const first = (await adjust(sql, c.id, '10.00', 'First correction', client)).rows[0].r as { entry_id: string };
+      const replay = (await adjust(sql, c.id, '10.00', 'First correction', client)).rows[0].r as { status: string; entry_id: string };
+      expect(replay).toMatchObject({ status: 'duplicate', entry_id: first.entry_id });
+      const { rows } = await sql('select count(*)::int as n from public.supplier_ledger_entries where supplier_id = $1', [c.id]);
+      expect(rows[0].n).toBe(1);
+    });
+  });
+
+  it('only the authorised roles may adjust: owner, admin and manager yes; storekeeper, cashier and auditor no', async () => {
+    await asAdmin(async (sql) => {
+      await sql(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: USERS.owner, role: 'authenticated' })]);
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'LCK-ROLE', vat_number: null }))).rows[0].r as { id: string };
+      for (const user of [USERS.storekeeper, USERS.cashier, USERS.auditor]) {
+        await sql(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: user, role: 'authenticated' })]);
+        await refused(sql, () => adjust(sql, c.id, '1.00'), 'forbidden');
+      }
+      await sql(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: USERS.manager, role: 'authenticated' })]);
+      expect((await adjust(sql, c.id, '1.00')).rows[0].r.status).toBe('created');
+    });
+  });
+
+  it('an adjustment needs a real reason, a non-zero amount with at most two decimals, and a supplier of this organisation', async () => {
+    await asOwner(async (sql) => {
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'LCK-VAL', vat_number: null }))).rows[0].r as { id: string };
+      await refused(sql, () => adjust(sql, c.id, '5.00', 'ok'), 'supplier.reason_required');
+      await refused(sql, () => adjust(sql, c.id, '0.00'), 'supplier.amount_invalid');
+      await refused(sql, () => adjust(sql, c.id, '1.005'), 'supplier.amount_invalid');
+      await refused(sql, () => adjust(sql, c.id, 'NaN'), 'supplier.amount_invalid');
+      await refused(sql, () => adjust(sql, randomUUID(), '5.00'), 'supplier.not_found');
+    });
+  });
+
+  it('the ledger cannot be edited, deleted or truncated, even by the migration owner', async () => {
+    await asAdmin(async (sql) => {
+      await sql(`select set_config('request.jwt.claims', $1, false)`, [JSON.stringify({ sub: USERS.owner, role: 'authenticated' })]);
+      const c = (await save(sql, DEMO_ORG, valid({ supplier_code: 'LCK-IMM', vat_number: null }))).rows[0].r as { id: string };
+      await postEntry(sql, c.id, '20.00');
+      await refused(sql, () => sql('update public.supplier_ledger_entries set amount = 1 where supplier_id = $1', [c.id]), /append-only/);
+      await refused(sql, () => sql('delete from public.supplier_ledger_entries where supplier_id = $1', [c.id]), /append-only/);
+      await refused(sql, () => sql('truncate public.supplier_ledger_entries'), /append-only/);
+    });
+  });
+
+  it('no client can read or write the ledger table directly', async () => {
+    await asOwner(async (sql) => {
+      await refused(sql, () => sql('select count(*) from public.supplier_ledger_entries'), /permission denied/);
+      await refused(sql, () => sql(`insert into public.supplier_ledger_entries (org_id, supplier_id, client_id, entry_type, amount) values ($1, $1, gen_random_uuid(), 'adjustment', 1)`, [DEMO_ORG]), /permission denied/);
     });
   });
 });

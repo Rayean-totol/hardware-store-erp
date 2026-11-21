@@ -48,6 +48,15 @@ describe('supplier repository', () => {
     expect(supplierPayload({ nameEn: 'A', nameAr: 'ا', city: null, mobile: '' })).toMatchObject({ city: null, mobile: '' });
   });
 
+  it('maps the lock state and balance, and posts an adjustment through post_supplier_adjustment', async () => {
+    const withBalance = mapSupplier({ ...ROW, opening_balance: '100.00', opening_balance_locked: true, current_balance: '75.50' } as never);
+    expect(withBalance).toMatchObject({ openingBalanceLocked: true, currentBalance: '75.50' });
+    const { db, rpc } = fakeDb({ status: 'created', entry_id: 'e1', balance: '75.50' });
+    const result = await createSupabaseSupplierRepository(db).adjustBalance('o1', 's1', 'c1', ' -24.50 ', ' Correction ');
+    expect(rpc).toHaveBeenCalledWith('post_supplier_adjustment', { p_org_id: 'o1', p_client_id: 'c1', p_supplier_id: 's1', p_amount: '-24.50', p_reason: 'Correction' });
+    expect(result).toEqual({ status: 'created', entryId: 'e1', balance: '75.50' });
+  });
+
   it('surfaces a refusal from the server as a DataError with the code', async () => {
     const db = { rpc: vi.fn(async () => ({ data: null, error: { message: 'supplier.code_taken', details: 'NAJD', code: 'P0001' } })) } as unknown as DbClient;
     await expect(createSupabaseSupplierRepository(db).save('o1', { nameEn: 'A', nameAr: 'ا' }, null)).rejects.toMatchObject({ code: 'supplier.code_taken' });
