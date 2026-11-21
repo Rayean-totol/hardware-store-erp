@@ -27,6 +27,8 @@ export interface ProductCsvLookups {
   categoryIdByName: ReadonlyMap<string, string>;
   brandIdByName: ReadonlyMap<string, string>;
   existingBySku: ReadonlyMap<string, { id: string; rowVersion: number }>;
+  /** barcode -> SKU of the existing product that already uses it (duplicate detection). */
+  existingBarcodes?: ReadonlyMap<string, string>;
 }
 
 export interface CsvIssue {
@@ -99,6 +101,18 @@ export function planProductImport(text: string, orgId: string, lookups: ProductC
     groups.set(sku, list);
   });
 
+  // A barcode must identify one product: in this file (across SKUs) and in the database.
+  const barcodeSkus = new Map<string, Set<string>>();
+  for (const [sku, entries] of groups) {
+    for (const e of entries) {
+      const b = cell(e.row, 'barcode');
+      if (!b) continue;
+      const set = barcodeSkus.get(b) ?? new Set<string>();
+      set.add(sku);
+      barcodeSkus.set(b, set);
+    }
+  }
+
   const products: PlannedProduct[] = [];
   for (const [sku, entries] of groups) {
     const firstLine = entries[0]!.line;
@@ -112,6 +126,22 @@ export function planProductImport(text: string, orgId: string, lookups: ProductC
     for (const e of entries) {
       if (cell(e.row, 'base_unit').toLowerCase() !== baseCode) {
         issues.push({ line: e.line, path: 'base_unit', code: 'import.base_unit_conflict' });
+      }
+    }
+    // Rows that repeat a SKU must describe the same product.
+    for (const e of entries.slice(1)) {
+      if (cell(e.row, 'name_en') !== cell(first, 'name_en') || cell(e.row, 'category').toLowerCase() !== cell(first, 'category').toLowerCase()) {
+        issues.push({ line: e.line, path: 'name_en', code: 'import.sku_conflict' });
+      }
+    }
+    // Barcodes: duplicates within the file, or already used by another product in the database.
+    for (const e of entries) {
+      const b = cell(e.row, 'barcode');
+      if (!b) continue;
+      const owners = barcodeSkus.get(b) ?? new Set<string>();
+      const existingOwner = lookups.existingBarcodes?.get(b);
+      if (owners.size > 1 || (existingOwner !== undefined && existingOwner !== sku)) {
+        issues.push({ line: e.line, path: 'barcode', code: 'import.duplicate_barcode' });
       }
     }
 

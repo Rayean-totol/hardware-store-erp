@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@erp/ui';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, ArchiveRestore, Download, LayoutGrid, List, Pencil, Plus, Printer, Search, Upload } from 'lucide-react';
+import { Archive, ArchiveRestore, Download, ImagePlus, LayoutGrid, List, Pencil, Plus, Printer, Search, Upload } from 'lucide-react';
 import Link from 'next/link';
 import * as React from 'react';
 import { ErrorAlert } from '@/components/error-message';
@@ -163,6 +163,9 @@ export function ProductList() {
             </Button>
             {can('catalog.write') ? (
               <Button variant="outline" asChild><Link href="/products/import/"><Upload aria-hidden="true" />{t('products.import')}</Link></Button>
+            ) : null}
+            {can('catalog.write') ? (
+              <Button variant="outline" asChild><Link href="/products/images/"><ImagePlus aria-hidden="true" />{t('products.bulk_images')}</Link></Button>
             ) : null}
             {can('catalog.write') ? (
               <Button asChild>

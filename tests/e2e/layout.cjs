@@ -2,7 +2,7 @@
 const { openApp, overflowOf, ORIGIN, BASE } = require('./harness.cjs');
 const assert = require('node:assert/strict');
 
-const PAGES = ['/dashboard/', '/products/', '/products/new/', '/inventory/', '/inventory/move/?type=stock_in', '/inventory/history/',
+const PAGES = ['/dashboard/', '/products/', '/products/new/', '/inventory/', '/inventory/move/?type=stock_in', '/inventory/history/', '/products/import/', '/products/images/',
   '/pos/', '/warehouses/', '/team/', '/catalog/', '/labels/'];
 const WIDTHS = [320, 390, 430, 600, 768, 1024, 1440];
 

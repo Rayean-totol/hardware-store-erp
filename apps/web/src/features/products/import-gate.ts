@@ -5,12 +5,14 @@ import type { ImportPlan } from '@erp/domain';
  * fatal file problem, or an empty plan blocks the whole import. Partial imports are never allowed,
  * because the rows that would have been saved are not the ones the user reviewed as a whole.
  */
-export type ImportBlock = 'no_plan' | 'fatal' | 'invalid' | 'nothing';
+export type ImportBlock = 'no_plan' | 'fatal' | 'invalid' | 'nothing' | 'overwrite_unconfirmed';
 
-export function importBlockReason(plan: ImportPlan | null): ImportBlock | null {
+export function importBlockReason(plan: ImportPlan | null, confirmedOverwrite = false): ImportBlock | null {
   if (!plan) return 'no_plan';
   if (plan.fatal.length > 0) return 'fatal';
   if (plan.counts.invalid > 0 || plan.products.some((p) => p.action === 'invalid')) return 'invalid';
   if (plan.counts.create + plan.counts.update === 0) return 'nothing';
+  // Existing products are overwritten only after an explicit confirmation.
+  if (plan.counts.update > 0 && !confirmedOverwrite) return 'overwrite_unconfirmed';
   return null;
 }
